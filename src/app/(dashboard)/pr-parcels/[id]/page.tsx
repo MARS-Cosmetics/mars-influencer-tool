@@ -1,0 +1,280 @@
+export const dynamic = "force-dynamic";
+
+import { prisma } from "@/lib/db";
+import { ParcelStatus } from "@/generated/prisma";
+import { notFound } from "next/navigation";
+import Link from "next/link";
+import { ArrowLeft, Package, MapPin, Truck } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
+const parcelStatusColors: Record<ParcelStatus, string> = {
+  preparing: "bg-gray-100 text-gray-700",
+  shipped: "bg-blue-100 text-blue-700",
+  in_transit: "bg-yellow-100 text-yellow-700",
+  delivered: "bg-green-100 text-green-700",
+  returned: "bg-red-100 text-red-700",
+};
+
+function formatDate(date: Date | null | undefined): string {
+  if (!date) return "-";
+  return new Date(date).toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function formatDateTime(date: Date | null | undefined): string {
+  if (!date) return "-";
+  return new Date(date).toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatCurrency(value: unknown): string {
+  if (value === null || value === undefined) return "-";
+  return `₹${Number(value).toLocaleString("en-IN")}`;
+}
+
+const statusOrder: ParcelStatus[] = [
+  "preparing",
+  "shipped",
+  "in_transit",
+  "delivered",
+];
+
+export default async function PrParcelDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+
+  const parcel = await prisma.prParcel.findUnique({
+    where: { id },
+    include: {
+      influencer: true,
+      brand: true,
+      collaboration: true,
+      items: {
+        include: { product: true },
+      },
+    },
+  });
+
+  if (!parcel) {
+    notFound();
+  }
+
+  const currentStatusIndex = statusOrder.indexOf(parcel.status);
+  const isReturned = parcel.status === "returned";
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <Link href="/pr-parcels">
+          <Button variant="ghost" size="icon">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+        </Link>
+        <div className="flex-1">
+          <h1 className="text-2xl font-bold">
+            PR Parcel for {parcel.influencer.name}
+          </h1>
+          <p className="text-sm text-gray-500">{parcel.brand.name}</p>
+        </div>
+        <Badge className={parcelStatusColors[parcel.status]}>
+          {parcel.status.replace("_", " ")}
+        </Badge>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-gray-500">
+              Shipping Info
+            </CardTitle>
+            <Truck className="h-4 w-4 text-gray-400" />
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <div>
+              <p className="text-xs text-gray-500">Courier</p>
+              <p className="text-sm font-medium">{parcel.courierName || "-"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Tracking Number</p>
+              <p className="text-sm font-mono font-medium">
+                {parcel.trackingNumber || "-"}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-gray-500">
+              Address
+            </CardTitle>
+            <MapPin className="h-4 w-4 text-gray-400" />
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm whitespace-pre-wrap">
+              {parcel.shippingAddress || "No address provided"}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-gray-500">
+              Timeline
+            </CardTitle>
+            <Package className="h-4 w-4 text-gray-400" />
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <div>
+              <p className="text-xs text-gray-500">Created</p>
+              <p className="text-sm">{formatDateTime(parcel.createdAt)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Shipped</p>
+              <p className="text-sm">{formatDateTime(parcel.shippedAt)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Delivered</p>
+              <p className="text-sm">{formatDateTime(parcel.deliveredAt)}</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Status Timeline */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Shipping Status</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isReturned ? (
+            <div className="flex items-center justify-center py-4">
+              <Badge className="bg-red-100 text-red-700 text-base px-4 py-2">
+                Parcel Returned
+              </Badge>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              {statusOrder.map((step, index) => {
+                const isCompleted = index <= currentStatusIndex;
+                const isCurrent = index === currentStatusIndex;
+                return (
+                  <div key={step} className="flex flex-1 items-center">
+                    <div className="flex flex-col items-center">
+                      <div
+                        className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${
+                          isCompleted
+                            ? isCurrent
+                              ? "bg-blue-500 text-white"
+                              : "bg-green-500 text-white"
+                            : "bg-gray-200 text-gray-500"
+                        }`}
+                      >
+                        {index + 1}
+                      </div>
+                      <p
+                        className={`mt-1 text-xs capitalize ${
+                          isCompleted
+                            ? "font-medium text-gray-900"
+                            : "text-gray-400"
+                        }`}
+                      >
+                        {step.replace("_", " ")}
+                      </p>
+                    </div>
+                    {index < statusOrder.length - 1 && (
+                      <div
+                        className={`mx-2 h-0.5 flex-1 ${
+                          index < currentStatusIndex
+                            ? "bg-green-500"
+                            : "bg-gray-200"
+                        }`}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {parcel.collaboration && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Linked Collaboration</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm">
+              <span className="text-gray-500">Type:</span>{" "}
+              {parcel.collaboration.type.replace("_", " ")}
+            </p>
+            <p className="text-sm">
+              <span className="text-gray-500">Status:</span>{" "}
+              {parcel.collaboration.status.replace("_", " ")}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Items ({parcel.items.length})</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {parcel.items.length === 0 ? (
+            <p className="text-center text-gray-500 py-4">
+              No items in this parcel.
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Product</TableHead>
+                  <TableHead>SKU</TableHead>
+                  <TableHead>MRP</TableHead>
+                  <TableHead>Quantity</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {parcel.items.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell className="font-medium">
+                      {item.product.name}
+                    </TableCell>
+                    <TableCell className="text-gray-500">
+                      {item.product.sku || "-"}
+                    </TableCell>
+                    <TableCell>{formatCurrency(item.product.mrp)}</TableCell>
+                    <TableCell>{item.quantity}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

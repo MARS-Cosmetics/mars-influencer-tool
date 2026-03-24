@@ -1,13 +1,1034 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider   = "postgresql"
+  extensions = [pgcrypto]
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum UserRole {
+  admin
+  manager
+  user
+}
+
+enum Gender {
+  male
+  female
+  non_binary
+  other
+}
+
+enum InfluencerTier {
+  nano
+  micro
+  mid
+  macro
+  mega
+}
+
+enum InfluencerSource {
+  google_form
+  instagram_dm
+  email
+  manual_discovery
+  inbound
+  referral
+  agency
+  event
+}
+
+enum InfluencerStatus {
+  discovered
+  contacted
+  form_submitted
+  demographics_verified
+  onboarded
+  active
+  inactive
+  blacklisted
+  do_not_contact
+}
+
+enum PaymentPreference {
+  bank_transfer
+  upi
+  other
+}
+
+enum CampaignStatus {
+  draft
+  active
+  paused
+  completed
+  cancelled
+}
+
+enum CollaborationType {
+  paid
+  barter
+  pr_gifting
+}
+
+enum CollaborationStatus {
+  draft
+  outreach
+  negotiation
+  confirmed
+  in_progress
+  content_submitted
+  content_approved
+  completed
+  cancelled
+}
+
+enum Platform {
+  instagram
+  youtube
+  twitter
+  linkedin
+  blog
+  other
+}
+
+enum ContentType {
+  reel
+  static_post
+  carousel
+  video
+  short
+  tweet
+  article
+  other
+}
+
+enum AssetStatus {
+  pending
+  submitted
+  approved
+  revision_requested
+  published
+  rejected
+}
+
+enum ParcelStatus {
+  preparing
+  shipped
+  in_transit
+  delivered
+  returned
+}
+
+enum PaymentMethod {
+  bank_transfer
+  upi
+  razorpay
+  other
+}
+
+enum PaymentStatus {
+  pending
+  approved
+  processing
+  paid
+  failed
+  cancelled
+}
+
+enum InvoiceStatus {
+  received
+  verified
+  approved
+  paid
+  disputed
+  cancelled
+}
+
+enum ContractType {
+  exclusivity
+  brand_ambassador
+  retainer
+  one_time
+  nda
+}
+
+enum ContractStatus {
+  draft
+  sent
+  signed
+  active
+  expired
+  terminated
+}
+
+enum ContentIdeaStatus {
+  idea
+  approved
+  briefed
+  in_production
+  published
+  rejected
+}
+
+enum ApprovalStatus {
+  auto_approved
+  pending_approval
+  approved
+  rejected
+}
+
+enum PaymentTrigger {
+  on_confirmation      // when collab is confirmed
+  on_content_submission // when content is submitted
+  on_content_approval   // when content is approved
+  on_publication        // when content is published
+  on_completion         // when collab is completed
+  net_15                // 15 days from invoice
+  net_30                // 30 days from invoice
+  net_45                // 45 days from invoice
+  custom                // manual trigger
+}
+
+enum ContentIdeaPriority {
+  low
+  medium
+  high
+}
+
+enum ContentTheme {
+  festival
+  launch
+  tutorial
+  grwm
+  haul
+  review
+  unboxing
+  challenge
+  collab
+  seasonal
+  trending
+  educational
+  behind_the_scenes
+  other
+}
+
+// ============================================================
+// 1. USERS — Internal team members
+// ============================================================
+
+model User {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email     String   @unique
+  name      String
+  password  String
+  role      UserRole @default(user)
+  avatarUrl String?  @map("avatar_url")
+  brandId   String?  @map("brand_id") @db.Uuid
+  isActive  Boolean  @default(true) @map("is_active")
+
+  // Approval hierarchy
+  approvalLimit Decimal? @map("approval_limit") @db.Decimal(12, 2) // max collaboration amount user can auto-approve
+  managerId     String?  @map("manager_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  // Relations
+  brand                Brand?          @relation(fields: [brandId], references: [id])
+  manager              User?           @relation("UserManager", fields: [managerId], references: [id])
+  directReports        User[]          @relation("UserManager")
+  assignedCollaborations Collaboration[] @relation("AssignedCollaborations")
+  approvedCollaborations Collaboration[] @relation("ApprovedCollaborations")
+  createdInfluencers   Influencer[]    @relation("CreatedInfluencers")
+  createdCampaigns     Campaign[]      @relation("CreatedCampaigns")
+  createdCollaborations Collaboration[] @relation("CreatedCollaborations")
+  createdPrParcels     PrParcel[]      @relation("CreatedPrParcels")
+  approvedPayments     Payment[]       @relation("ApprovedPayments")
+  verifiedInvoices     Invoice[]       @relation("VerifiedInvoices")
+  createdContracts     Contract[]      @relation("CreatedContracts")
+  createdContentIdeas  ContentIdea[]   @relation("CreatedContentIdeas")
+  activityLogs         ActivityLog[]
+
+  @@map("users")
+}
+
+// ============================================================
+// 2. BRANDS — Multiple brands within MARS
+// ============================================================
+
+model Brand {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  slug        String   @unique
+  logoUrl     String?  @map("logo_url")
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  // Relations
+  users          User[]
+  campaigns      Campaign[]
+  collaborations Collaboration[]
+  products       Product[]
+  prParcels      PrParcel[]
+  contracts      Contract[]
+  contentIdeas   ContentIdea[]
+
+  @@map("brands")
+}
+
+// ============================================================
+// 3. INFLUENCERS — The influencer universe (comprehensive)
+// ============================================================
+
+model Influencer {
+  id              String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  // ===== BASIC PROFILE =====
+  name            String
+  email           String?
+  phone           String?
+  whatsappNumber  String? @map("whatsapp_number")
+  dateOfBirth     DateTime? @map("date_of_birth") @db.Date
+  gender          Gender?
+  bio             String?
+  profileImageUrl String? @map("profile_image_url")
+
+  // ===== SOCIAL HANDLES =====
+  instagramHandle   String? @unique @map("instagram_handle")
+  instagramId       String? @map("instagram_id")
+  youtubeHandle     String? @map("youtube_handle")
+  youtubeChannelId  String? @map("youtube_channel_id")
+  twitterHandle     String? @map("twitter_handle")
+  linkedinUrl       String? @map("linkedin_url")
+  blogUrl           String? @map("blog_url")
+  tiktokHandle      String? @map("tiktok_handle")
+  snapchatHandle    String? @map("snapchat_handle")
+
+  // ===== LOCATION =====
+  addressLine1 String? @map("address_line1")
+  addressLine2 String? @map("address_line2")
+  city         String?
+  state        String?
+  pincode      String?
+  country      String? @default("India")
+
+  // ===== TIER & CATEGORY =====
+  tier            InfluencerTier?
+  categories      String[]   // e.g., ['skincare', 'haircare', 'wellness']
+  contentNiches   String[]   @map("content_niches") // ['GRWM', 'reviews', 'tutorials']
+  languages       String[]   // ['hindi', 'english', 'tamil']
+  primaryLanguage String?    @map("primary_language")
+
+  // ===== INSTAGRAM METRICS =====
+  igFollowerCount     Int?     @map("ig_follower_count")
+  igFollowingCount    Int?     @map("ig_following_count")
+  igPostCount         Int?     @map("ig_post_count")
+  igEngagementRate    Decimal? @map("ig_engagement_rate") @db.Decimal(5, 2)
+  igAvgLikes          Int?     @map("ig_avg_likes")
+  igAvgComments       Int?     @map("ig_avg_comments")
+  igAvgReelViews      Int?     @map("ig_avg_reel_views")
+  igAvgStoryViews     Int?     @map("ig_avg_story_views")
+  igLast8ReelViews    Int[]    @map("ig_last_8_reel_views")
+  igMedianReelViews   Int?     @map("ig_median_reel_views")
+
+  // ===== INSTAGRAM AUDIENCE DEMOGRAPHICS =====
+  igAudienceMalePct       Decimal? @map("ig_audience_male_pct") @db.Decimal(5, 2)
+  igAudienceFemalePct     Decimal? @map("ig_audience_female_pct") @db.Decimal(5, 2)
+  igAudienceTopAgeRange   String?  @map("ig_audience_top_age_range")
+  igAudienceAgeBreakdown  Json?    @map("ig_audience_age_breakdown")
+  igAudienceTopCities     Json?    @map("ig_audience_top_cities")
+  igAudienceTopCountries  Json?    @map("ig_audience_top_countries")
+  igAudienceLanguageSplit Json?    @map("ig_audience_language_split")
+  igCredibilityScore      Decimal? @map("ig_credibility_score") @db.Decimal(5, 2)
+
+  // ===== YOUTUBE METRICS =====
+  ytSubscriberCount       Int?     @map("yt_subscriber_count")
+  ytTotalViews            Int?     @map("yt_total_views")
+  ytAvgViews              Int?     @map("yt_avg_views")
+  ytEngagementRate        Decimal? @map("yt_engagement_rate") @db.Decimal(5, 2)
+  ytLast8VideoViews       Int[]    @map("yt_last_8_video_views")
+  ytMedianVideoViews      Int?     @map("yt_median_video_views")
+  ytAudienceMalePct       Decimal? @map("yt_audience_male_pct") @db.Decimal(5, 2)
+  ytAudienceFemalePct     Decimal? @map("yt_audience_female_pct") @db.Decimal(5, 2)
+  ytAudienceAgeBreakdown  Json?    @map("yt_audience_age_breakdown")
+  ytAudienceTopCountries  Json?    @map("yt_audience_top_countries")
+
+  // ===== SOCIAL SCORE & QUALITY =====
+  socialScore          Decimal? @map("social_score") @db.Decimal(5, 2)
+  brandAffinityScore   Decimal? @map("brand_affinity_score") @db.Decimal(5, 2)
+  contentQualityScore  Decimal? @map("content_quality_score") @db.Decimal(5, 2)
+  reliabilityScore     Decimal? @map("reliability_score") @db.Decimal(5, 2)
+  pastCollabCount      Int      @default(0) @map("past_collab_count")
+  isVerified           Boolean  @default(false) @map("is_verified")
+
+  // ===== FINANCIAL DETAILS =====
+  panNumber         String? @map("pan_number")
+  gstin             String?
+  bankAccountName   String? @map("bank_account_name")
+  bankAccountNumber String? @map("bank_account_number")
+  bankIfscCode      String? @map("bank_ifsc_code")
+  bankName          String? @map("bank_name")
+  upiId             String? @map("upi_id")
+  paymentPreference PaymentPreference? @default(bank_transfer) @map("payment_preference")
+
+  // ===== RATE CARD =====
+  rateInstagramReel  Decimal? @map("rate_instagram_reel") @db.Decimal(10, 2)
+  rateInstagramStory Decimal? @map("rate_instagram_story") @db.Decimal(10, 2)
+  rateInstagramPost  Decimal? @map("rate_instagram_post") @db.Decimal(10, 2)
+  rateYoutubeVideo   Decimal? @map("rate_youtube_video") @db.Decimal(10, 2)
+  rateYoutubeShort   Decimal? @map("rate_youtube_short") @db.Decimal(10, 2)
+  rateBlogPost       Decimal? @map("rate_blog_post") @db.Decimal(10, 2)
+  rateTwitterPost    Decimal? @map("rate_twitter_post") @db.Decimal(10, 2)
+  rateCurrency       String?  @default("INR") @map("rate_currency")
+  rateNotes          String?  @map("rate_notes")
+
+  // ===== ONBOARDING =====
+  source          InfluencerSource?
+  referredBy      String?  @map("referred_by")
+  agencyId        String?  @map("agency_id") @db.Uuid
+  managedBy       String?  @default("self") @map("managed_by") // "self" or "agency"
+  status          InfluencerStatus @default(discovered)
+  onboardedAt     DateTime? @map("onboarded_at") @db.Timestamptz()
+  blacklistReason String?   @map("blacklist_reason")
+
+  // ===== TAGS & NOTES =====
+  tags           String[]
+  internalNotes  String? @map("internal_notes")
+
+  // ===== FLEXIBLE DATA =====
+  platformAnalytics  Json?   @map("platform_analytics")
+  metadata           Json?
+  culturexProfileId  String? @map("culturex_profile_id")
+
+  // ===== DATA FRESHNESS =====
+  metricsLastSyncedAt DateTime? @map("metrics_last_synced_at") @db.Timestamptz()
+
+  // ===== AUDIT =====
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+  createdBy String?  @map("created_by") @db.Uuid
+
+  // Relations
+  creator        User?             @relation("CreatedInfluencers", fields: [createdBy], references: [id])
+  agency         Agency?           @relation(fields: [agencyId], references: [id])
+  collaborations Collaboration[]
+  prParcels      PrParcel[]
+  assets         Asset[]
+  payments       Payment[]
+  invoices       Invoice[]
+  contracts      Contract[]
+  contentIdeas   ContentIdea[]
+
+  @@index([instagramHandle])
+  @@index([tier])
+  @@index([status])
+  @@index([city])
+  @@index([socialScore])
+  @@index([igFollowerCount])
+  @@index([categories], type: Gin)
+  @@index([tags], type: Gin)
+  @@map("influencers")
+}
+
+// ============================================================
+// 4. CAMPAIGNS — Groups of collaborations with budgets
+// ============================================================
+
+model Campaign {
+  id          String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  brandId     String         @map("brand_id") @db.Uuid
+  name        String
+  description String?
+  status      CampaignStatus @default(draft)
+
+  // Budget
+  totalBudget Decimal? @map("total_budget") @db.Decimal(12, 2)
+  spentBudget Decimal? @default(0) @map("spent_budget") @db.Decimal(12, 2)
+  currency    String?  @default("INR")
+
+  // Timeline
+  startDate DateTime? @map("start_date") @db.Date
+  endDate   DateTime? @map("end_date") @db.Date
+
+  // Goals
+  goals Json?
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+  createdBy String?  @map("created_by") @db.Uuid
+
+  // Relations
+  brand          Brand           @relation(fields: [brandId], references: [id])
+  creator        User?           @relation("CreatedCampaigns", fields: [createdBy], references: [id])
+  collaborations Collaboration[]
+  contentIdeas   ContentIdea[]
+
+  @@map("campaigns")
+}
+
+// ============================================================
+// 5. COLLABORATIONS — Central entity
+// ============================================================
+
+model Collaboration {
+  id           String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  influencerId String              @map("influencer_id") @db.Uuid
+  brandId      String              @map("brand_id") @db.Uuid
+  campaignId   String?             @map("campaign_id") @db.Uuid
+  assignedTo   String              @map("assigned_to") @db.Uuid
+
+  // Type & Status
+  type   CollaborationType
+  status CollaborationStatus @default(draft)
+
+  // Commercials
+  agreedAmount  Decimal? @map("agreed_amount") @db.Decimal(12, 2)
+  currency      String?  @default("INR")
+  paymentTermId String?  @map("payment_term_id") @db.Uuid
+
+  // Content specification
+  platform        Platform?
+  contentType     ContentType?    @map("content_type")
+  deliverableCount Int?           @map("deliverable_count") // e.g., 2 reels
+  deliverables    Json?           // structured: [{platform, contentType, count}]
+  brief           String?
+
+  // Shopify order
+  shopifyOrderId     String?  @map("shopify_order_id")
+  shopifyOrderNumber String?  @map("shopify_order_number")
+  shopifyOrderStatus String?  @map("shopify_order_status") // unfulfilled, fulfilled, cancelled
+  shopifyTrackingId  String?  @map("shopify_tracking_id")
+  shopifyTrackingUrl String?  @map("shopify_tracking_url")
+  shopifyFulfillmentStatus String? @map("shopify_fulfillment_status")
+  shopifyLastSyncAt  DateTime? @map("shopify_last_sync_at") @db.Timestamptz()
+
+  // Timeline - auto-computed from latest asset dueDate
+  dueDate DateTime? @map("due_date") @db.Date
+
+  // Agency snapshot (frozen at collaboration time)
+  agencyId              String?  @map("agency_id") @db.Uuid
+  agencyNameSnapshot    String?  @map("agency_name_snapshot")
+  agencyCommissionPct   Decimal? @map("agency_commission_pct") @db.Decimal(5, 2)
+
+  // Approval workflow
+  approvalStatus ApprovalStatus? @map("approval_status") @default(auto_approved)
+  approvedBy     String?         @map("approved_by") @db.Uuid
+  approvedAt     DateTime?       @map("approved_at") @db.Timestamptz()
+  approvalNotes  String?         @map("approval_notes")
+
+  // Rating
+  contentRating Decimal? @map("content_rating") @db.Decimal(2, 1)
+  ratingNotes   String?  @map("rating_notes")
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+  createdBy String?  @map("created_by") @db.Uuid
+
+  // Relations
+  influencer  Influencer             @relation(fields: [influencerId], references: [id])
+  brand       Brand                  @relation(fields: [brandId], references: [id])
+  campaign    Campaign?              @relation(fields: [campaignId], references: [id])
+  assignee    User                   @relation("AssignedCollaborations", fields: [assignedTo], references: [id])
+  approver    User?                  @relation("ApprovedCollaborations", fields: [approvedBy], references: [id])
+  creator     User?                  @relation("CreatedCollaborations", fields: [createdBy], references: [id])
+  agency      Agency?                @relation(fields: [agencyId], references: [id])
+  paymentTerm PaymentTerm?           @relation(fields: [paymentTermId], references: [id])
+  products    CollaborationProduct[]
+  assets      Asset[]
+  payments    Payment[]
+  invoices    Invoice[]
+  prParcels   PrParcel[]
+  contracts    Contract[]
+  contentIdeas ContentIdea[]
+
+  @@index([assignedTo])
+  @@index([influencerId])
+  @@index([brandId])
+  @@index([campaignId])
+  @@index([status])
+  @@index([agencyId])
+  @@map("collaborations")
+}
+
+// ============================================================
+// 6. PRODUCTS — Product catalog
+// ============================================================
+
+model Product {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  brandId          String   @map("brand_id") @db.Uuid
+  name             String
+  sku              String?  @unique
+  description      String?
+  mrp              Decimal? @db.Decimal(10, 2)
+  imageUrl         String?  @map("image_url")
+  category         String?
+  isActive         Boolean  @default(true) @map("is_active")
+
+  // Shopify sync
+  shopifyProductId  String?  @map("shopify_product_id")
+  shopifyVariantId  String?  @map("shopify_variant_id")
+  shopifyInventoryItemId String? @map("shopify_inventory_item_id")
+  inventoryQuantity Int?     @map("inventory_quantity")
+  shopifyImageUrl   String?  @map("shopify_image_url")
+  shopifyLastSyncAt DateTime? @map("shopify_last_sync_at") @db.Timestamptz()
+
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  // Relations
+  brand                Brand                  @relation(fields: [brandId], references: [id])
+  collaborationProducts CollaborationProduct[]
+  prParcelItems        PrParcelItem[]
+
+  @@map("products")
+}
+
+// ============================================================
+// 7. COLLABORATION_PRODUCTS — Products linked to a collaboration
+// ============================================================
+
+model CollaborationProduct {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collaborationId String   @map("collaboration_id") @db.Uuid
+  productId       String   @map("product_id") @db.Uuid
+  quantity        Int      @default(1)
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  // Relations
+  collaboration Collaboration @relation(fields: [collaborationId], references: [id])
+  product       Product       @relation(fields: [productId], references: [id])
+
+  @@index([collaborationId])
+  @@index([productId])
+  @@map("collaboration_products")
+}
+
+// ============================================================
+// 8. PR_PARCELS — PR/gifting shipments
+// ============================================================
+
+model PrParcel {
+  id              String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  influencerId    String       @map("influencer_id") @db.Uuid
+  brandId         String       @map("brand_id") @db.Uuid
+  collaborationId String?      @map("collaboration_id") @db.Uuid
+
+  // Shipping
+  shippingAddress String? @map("shipping_address")
+  courierName     String? @map("courier_name")
+  trackingNumber  String? @map("tracking_number")
+
+  // Status
+  status      ParcelStatus @default(preparing)
+  shippedAt   DateTime?    @map("shipped_at") @db.Timestamptz()
+  deliveredAt DateTime?    @map("delivered_at") @db.Timestamptz()
+
+  // Shopify
+  shopifyOrderId String? @map("shopify_order_id")
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+  createdBy String?  @map("created_by") @db.Uuid
+
+  // Relations
+  influencer    Influencer     @relation(fields: [influencerId], references: [id])
+  brand         Brand          @relation(fields: [brandId], references: [id])
+  collaboration Collaboration? @relation(fields: [collaborationId], references: [id])
+  creator       User?          @relation("CreatedPrParcels", fields: [createdBy], references: [id])
+  items         PrParcelItem[]
+
+  @@index([influencerId])
+  @@index([brandId])
+  @@map("pr_parcels")
+}
+
+// ============================================================
+// 9. PR_PARCEL_ITEMS — Products in each PR parcel
+// ============================================================
+
+model PrParcelItem {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  prParcelId String   @map("pr_parcel_id") @db.Uuid
+  productId  String   @map("product_id") @db.Uuid
+  quantity   Int      @default(1)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  // Relations
+  prParcel PrParcel @relation(fields: [prParcelId], references: [id])
+  product  Product  @relation(fields: [productId], references: [id])
+
+  @@index([prParcelId])
+  @@index([productId])
+  @@map("pr_parcel_items")
+}
+
+// ============================================================
+// 10. ASSETS — Content pieces across all platforms
+// ============================================================
+
+model Asset {
+  id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collaborationId String      @map("collaboration_id") @db.Uuid
+  influencerId    String      @map("influencer_id") @db.Uuid
+
+  // Content details
+  platform    Platform
+  contentType ContentType @map("content_type")
+
+  // Links & Files
+  contentUrl   String? @map("content_url")
+  fileUrl      String? @map("file_url")
+  thumbnailUrl String? @map("thumbnail_url")
+
+  // Performance
+  views       Int?
+  likes       Int?
+  comments    Int?
+  shares      Int?
+  saves       Int?
+  reach       Int?
+  impressions Int?
+
+  // Rating
+  contentRating Decimal? @map("content_rating") @db.Decimal(2, 1)
+  ratingTags    String[] @map("rating_tags")
+  ratingNotes   String?  @map("rating_notes")
+
+  // Status & Timeline
+  status      AssetStatus @default(pending)
+  dueDate     DateTime?   @map("due_date") @db.Date
+  publishedAt DateTime?   @map("published_at") @db.Timestamptz()
+
+  // Ad Rights
+  hasAdRights Boolean @default(false) @map("has_ad_rights")
+
+  // Viral Tracking
+  isViral          Boolean   @default(false) @map("is_viral")
+  viralMultiplier  Decimal?  @map("viral_multiplier") @db.Decimal(6, 2)
+  peakViews        Int?      @map("peak_views")
+  metricsSnapshot  Json?     @map("metrics_snapshot")  // { "24h": {...}, "48h": {...}, "7d": {...} }
+  baselineMetrics  Json?     @map("baseline_metrics")  // influencer's avg at time of posting
+  viralDetectedAt  DateTime? @map("viral_detected_at") @db.Timestamptz()
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  // Relations
+  collaboration Collaboration @relation(fields: [collaborationId], references: [id])
+  influencer    Influencer    @relation(fields: [influencerId], references: [id])
+
+  @@index([isViral])
+  @@map("assets")
+}
+
+// ============================================================
+// 11. PAYMENTS — Outgoing payments from MARS to influencers
+// ============================================================
+
+model Payment {
+  id              String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collaborationId String @map("collaboration_id") @db.Uuid
+  influencerId    String @map("influencer_id") @db.Uuid
+  invoiceId       String? @map("invoice_id") @db.Uuid
+
+  // Amount
+  amount   Decimal @map("amount") @db.Decimal(12, 2)
+  currency String? @default("INR")
+
+  // Tax
+  tdsPercentage Decimal? @map("tds_percentage") @db.Decimal(4, 2)
+  tdsAmount     Decimal? @map("tds_amount") @db.Decimal(12, 2)
+  netAmount     Decimal? @map("net_amount") @db.Decimal(12, 2)
+
+  // Payment details
+  paymentMethod  PaymentMethod?  @map("payment_method")
+  transactionRef String?         @map("transaction_ref")
+  trigger        PaymentTrigger? // when this payment is due
+  installmentLabel String?       @map("installment_label") // e.g., "Advance", "On Approval"
+
+  // Status
+  status PaymentStatus @default(pending)
+  paidAt DateTime?     @map("paid_at") @db.Timestamptz()
+
+  // Agency payment
+  agencyId              String?  @map("agency_id") @db.Uuid
+  agencyCommissionPct   Decimal? @map("agency_commission_pct") @db.Decimal(5, 2)
+  agencyCommissionAmount Decimal? @map("agency_commission_amount") @db.Decimal(12, 2)
+
+  // Business Central
+  bcEntryId String? @map("bc_entry_id")
+
+  // Audit
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+  approvedBy String?  @map("approved_by") @db.Uuid
+
+  // Relations
+  collaboration Collaboration @relation(fields: [collaborationId], references: [id])
+  influencer    Influencer    @relation(fields: [influencerId], references: [id])
+  invoice       Invoice?      @relation(fields: [invoiceId], references: [id])
+  approver      User?         @relation("ApprovedPayments", fields: [approvedBy], references: [id])
+  agency        Agency?       @relation(fields: [agencyId], references: [id])
+
+  @@index([status])
+  @@index([collaborationId])
+  @@index([agencyId])
+  @@map("payments")
+}
+
+// ============================================================
+// 12. INVOICES — Invoices from influencers
+// ============================================================
+
+model Invoice {
+  id              String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collaborationId String @map("collaboration_id") @db.Uuid
+  influencerId    String @map("influencer_id") @db.Uuid
+
+  // Invoice details
+  invoiceNumber String   @unique @map("invoice_number")
+  invoiceDate   DateTime @map("invoice_date") @db.Date
+  dueDate       DateTime? @map("due_date") @db.Date
+  amount        Decimal  @db.Decimal(12, 2)
+  taxAmount     Decimal? @default(0) @map("tax_amount") @db.Decimal(12, 2)
+  totalAmount   Decimal  @map("total_amount") @db.Decimal(12, 2)
+  currency      String?  @default("INR")
+
+  // File
+  fileUrl String? @map("file_url")
+
+  // Status
+  status InvoiceStatus @default(received)
+
+  // Business Central
+  bcInvoiceId String? @map("bc_invoice_id")
+
+  // Audit
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+  verifiedBy String?  @map("verified_by") @db.Uuid
+
+  // Relations
+  collaboration Collaboration @relation(fields: [collaborationId], references: [id])
+  influencer    Influencer    @relation(fields: [influencerId], references: [id])
+  verifier      User?         @relation("VerifiedInvoices", fields: [verifiedBy], references: [id])
+  payments      Payment[]
+
+  @@map("invoices")
+}
+
+// ============================================================
+// 13. CONTRACTS — Contracts for big influencers
+// ============================================================
+
+model Contract {
+  id              String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  influencerId    String @map("influencer_id") @db.Uuid
+  brandId         String? @map("brand_id") @db.Uuid
+  collaborationId String? @map("collaboration_id") @db.Uuid
+
+  // Contract details
+  contractType ContractType @map("contract_type")
+  title        String
+  description  String?
+
+  // File
+  fileUrl String? @map("file_url")
+
+  // Validity
+  startDate DateTime @map("start_date") @db.Date
+  endDate   DateTime @map("end_date") @db.Date
+  autoRenew Boolean  @default(false) @map("auto_renew")
+
+  // Commercial terms
+  contractValue Decimal? @map("contract_value") @db.Decimal(12, 2)
+  currency      String?  @default("INR")
+  paymentTerms  String?  @map("payment_terms")
+
+  // Status
+  status   ContractStatus @default(draft)
+  signedAt DateTime?      @map("signed_at") @db.Timestamptz()
+
+  // Notifications
+  expiryAlertDays Int? @default(30) @map("expiry_alert_days")
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+  createdBy String?  @map("created_by") @db.Uuid
+
+  // Relations
+  influencer    Influencer     @relation(fields: [influencerId], references: [id])
+  brand         Brand?         @relation(fields: [brandId], references: [id])
+  collaboration Collaboration? @relation(fields: [collaborationId], references: [id])
+  creator       User?          @relation("CreatedContracts", fields: [createdBy], references: [id])
+
+  @@index([influencerId])
+  @@index([status])
+  @@index([endDate])
+  @@map("contracts")
+}
+
+// ============================================================
+// 14. AGENCIES — Talent management agencies
+// ============================================================
+
+model Agency {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name          String
+  contactPerson String?  @map("contact_person")
+  email         String?
+  phone         String?
+  website       String?
+  address       String?
+  city          String?
+  state         String?
+  gstNumber     String?  @map("gst_number")
+  panNumber     String?  @map("pan_number")
+  commissionPct Decimal? @map("commission_pct") @db.Decimal(5, 2) // default commission %
+  notes         String?
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  // Relations
+  influencers    Influencer[]
+  collaborations Collaboration[]
+  payments       Payment[]
+
+  @@map("agencies")
+}
+
+// ============================================================
+// 15. PAYMENT_TERMS — Reusable payment term templates
+// ============================================================
+
+model PaymentTerm {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String   @unique // e.g., "100% Advance", "50-50 Split", "Net 30"
+  description String?
+
+  // Installment breakdown as JSON array
+  // e.g., [{"percentage": 50, "trigger": "on_confirmation", "label": "Advance"},
+  //        {"percentage": 50, "trigger": "on_content_approval", "label": "On Approval"}]
+  installments Json
+
+  isDefault   Boolean  @default(false) @map("is_default")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  // Relations
+  collaborations Collaboration[]
+
+  @@map("payment_terms")
+}
+
+// ============================================================
+// 16. CONTENT_IDEAS — Content ideas and themes for campaigns
+// ============================================================
+
+model ContentIdea {
+  id              String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  // Core
+  title           String
+  description     String?
+  theme           ContentTheme       @default(other)
+  platform        Platform?
+  contentType     ContentType?       @map("content_type")
+
+  // Status & Priority
+  status          ContentIdeaStatus  @default(idea)
+  priority        ContentIdeaPriority? @default(medium)
+
+  // Relations
+  brandId         String?            @map("brand_id") @db.Uuid
+  campaignId      String?            @map("campaign_id") @db.Uuid
+  collaborationId String?            @map("collaboration_id") @db.Uuid
+  influencerId    String?            @map("influencer_id") @db.Uuid
+
+  // Reference material
+  referenceUrls   String[]           @map("reference_urls")
+  moodboardUrl    String?            @map("moodboard_url")
+  notes           String?
+
+  // Timeline
+  targetDate      DateTime?          @map("target_date") @db.Date
+
+  // Audit
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt       DateTime           @updatedAt @map("updated_at") @db.Timestamptz()
+  createdBy       String?            @map("created_by") @db.Uuid
+
+  // Relations
+  brand           Brand?             @relation(fields: [brandId], references: [id])
+  campaign        Campaign?          @relation(fields: [campaignId], references: [id])
+  collaboration   Collaboration?     @relation(fields: [collaborationId], references: [id])
+  influencer      Influencer?        @relation(fields: [influencerId], references: [id])
+  creator         User?              @relation("CreatedContentIdeas", fields: [createdBy], references: [id])
+
+  @@index([brandId])
+  @@index([campaignId])
+  @@index([status])
+  @@index([theme])
+  @@map("content_ideas")
+}
+
+// ============================================================
+// 16. SYNC_LOG — Track all Shopify sync operations
+// ============================================================
+
+model SyncLog {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  syncType   String   @map("sync_type") // products, inventory, orders, tracking
+  status     String   @default("running") // running, completed, failed
+  triggeredBy String? @map("triggered_by") // "cron" or user ID
+  startedAt  DateTime @default(now()) @map("started_at") @db.Timestamptz()
+  completedAt DateTime? @map("completed_at") @db.Timestamptz()
+  itemsProcessed Int?  @map("items_processed")
+  itemsCreated   Int?  @map("items_created")
+  itemsUpdated   Int?  @map("items_updated")
+  itemsFailed    Int?  @map("items_failed")
+  errorMessage   String? @map("error_message")
+  details        Json?
+
+  @@index([syncType])
+  @@index([startedAt])
+  @@map("sync_logs")
+}
+
+// ============================================================
+// 17. ACTIVITY_LOG — Audit trail for all actions
+// ============================================================
+
+model ActivityLog {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id") @db.Uuid
+  action     String
+  changes    Json?
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  // Relations
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@map("activity_log")
 }
