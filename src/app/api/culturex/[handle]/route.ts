@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { fetchPublicProfile } from "@/lib/instagram";
 
 export async function GET(
   request: Request,
@@ -11,6 +12,7 @@ export async function GET(
 
   const mockData = {
     found: true,
+    source: "culturex" as "culturex" | "instagram_fallback",
     handle,
     name: handle.replace(/[._]/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()),
     bio: "Beauty & Lifestyle Creator",
@@ -41,5 +43,57 @@ export async function GET(
   else if (mockData.igFollowerCount < 1000000) mockData.tier = "macro";
   else mockData.tier = "mega";
 
-  return NextResponse.json(mockData);
+  // In production, check if CultureX returned data. If not, fall back to Instagram.
+  // Simulate: if CultureX returns found=true, return it. Otherwise, try Instagram.
+  if (mockData.found) {
+    return NextResponse.json(mockData);
+  }
+
+  // ===== INSTAGRAM FALLBACK =====
+  // If CultureX returns no data (404 or empty), fall back to Instagram scraper
+  return instagramFallback(handle);
+}
+
+async function instagramFallback(handle: string) {
+  try {
+    const profile = await fetchPublicProfile(handle);
+
+    // Calculate tier from follower count
+    let tier: string;
+    if (profile.followerCount < 10000) tier = "nano";
+    else if (profile.followerCount < 50000) tier = "micro";
+    else if (profile.followerCount < 200000) tier = "mid";
+    else if (profile.followerCount < 1000000) tier = "macro";
+    else tier = "mega";
+
+    return NextResponse.json({
+      found: true,
+      source: "instagram_fallback" as const,
+      handle: profile.username,
+      name: profile.fullName,
+      bio: profile.biography,
+      profileImageUrl: profile.profilePicUrl,
+      igFollowerCount: profile.followerCount,
+      igFollowingCount: profile.followingCount,
+      igPostCount: profile.postCount,
+      // These fields are unavailable from Instagram public scraping
+      igEngagementRate: null,
+      igAvgLikes: null,
+      igAvgComments: null,
+      igAvgReelViews: null,
+      igAvgStoryViews: null,
+      igMedianReelViews: null,
+      igCredibilityScore: null,
+      igAudienceMalePct: null,
+      igAudienceFemalePct: null,
+      igAudienceTopAgeRange: null,
+      igAudienceTopCities: null,
+      igAudienceTopCountries: null,
+      categories: [],
+      tier,
+    });
+  } catch (error) {
+    console.error("Instagram fallback also failed:", error);
+    return NextResponse.json({ found: false, source: "instagram_fallback" }, { status: 404 });
+  }
 }

@@ -173,9 +173,11 @@ export default async function AssetsPage({
               </TableRow>
             ) : (
               assets.map((asset) => (
-                <TableRow key={asset.id}>
+                <TableRow key={asset.id} className="cursor-pointer hover:bg-gray-50">
                   <TableCell className="font-medium">
-                    {asset.influencer.name}
+                    <Link href={`/assets/${asset.id}`} className="hover:underline">
+                      {asset.influencer.name}
+                    </Link>
                   </TableCell>
                   <TableCell>
                     <Badge className={platformBadgeClass(asset.platform)}>
@@ -200,9 +202,15 @@ export default async function AssetsPage({
                     {formatNumber(asset.comments)}
                   </TableCell>
                   <TableCell className="text-right">
-                    {asset.contentRating != null
-                      ? Number(asset.contentRating).toFixed(1)
-                      : "-"}
+                    {asset.contentRating != null ? (
+                      <span className="text-yellow-500 tracking-tight">
+                        {Array.from({ length: 5 }, (_, i) =>
+                          i < Number(asset.contentRating) ? "★" : ""
+                        ).join("")}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">&mdash;</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     {asset.publishedAt

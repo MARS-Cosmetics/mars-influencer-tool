@@ -13,7 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { ArrowLeft, Loader2, Search } from "lucide-react";
+import { ArrowLeft, Loader2, Search, Info } from "lucide-react";
 import Link from "next/link";
 import { validatePhone, validateEmail, validatePAN, validateGST, validatePincode, validateIFSC, validateUPI, validateInstagramHandle } from "@/lib/validations";
 import { INDIAN_STATES, CONTENT_LANGUAGES } from "@/lib/constants";
@@ -100,6 +100,7 @@ export default function NewInfluencerPage() {
   });
 
   const [agencies, setAgencies] = useState<SearchableSelectOption[]>([]);
+  const [dataSource, setDataSource] = useState<"culturex" | "instagram_fallback" | null>(null);
   const [gstVerification, setGstVerification] = useState<{ status: "idle" | "loading" | "success" | "error"; message: string }>({ status: "idle", message: "" });
 
   // Fetch agencies
@@ -162,6 +163,7 @@ export default function NewInfluencerPage() {
       return;
     }
     setIsFetchingCultureX(true);
+    setDataSource(null);
     try {
       const res = await fetch(`/api/culturex/${encodeURIComponent(handle)}`);
       if (!res.ok) throw new Error("Failed to fetch from CultureX");
@@ -170,6 +172,7 @@ export default function NewInfluencerPage() {
         toast.error("Profile not found on CultureX");
         return;
       }
+      setDataSource(data.source || "culturex");
       setForm((prev) => ({
         ...prev,
         igFollowerCount: String(data.igFollowerCount ?? ""),
@@ -189,7 +192,11 @@ export default function NewInfluencerPage() {
         tier: data.tier || prev.tier,
         bio: prev.bio || data.bio || "",
       }));
-      toast.success("Profile data fetched from CultureX");
+      if (data.source === "instagram_fallback") {
+        toast.info("Profile fetched from Instagram (CultureX not available)");
+      } else {
+        toast.success("Profile data fetched from CultureX");
+      }
     } catch {
       toast.error("Failed to fetch from CultureX");
     } finally {
@@ -437,9 +444,21 @@ export default function NewInfluencerPage() {
         {hasMetrics && (
           <Card>
             <CardHeader>
-              <CardTitle>Instagram Metrics (via CultureX)</CardTitle>
+              <CardTitle>Instagram Metrics</CardTitle>
             </CardHeader>
             <CardContent>
+              {dataSource === "instagram_fallback" && (
+                <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-200">
+                  <Info className="size-4 mt-0.5 shrink-0" />
+                  <span>Limited data from Instagram (CultureX profile not found). Engagement rate and audience demographics unavailable.</span>
+                </div>
+              )}
+              {dataSource === "culturex" && (
+                <div className="mb-4 flex items-start gap-2 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800 dark:border-green-900 dark:bg-green-950/50 dark:text-green-200">
+                  <Info className="size-4 mt-0.5 shrink-0" />
+                  <span>Full profile data from CultureX</span>
+                </div>
+              )}
               <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
                 <div>
                   <p className="text-xs text-muted-foreground">Followers</p>

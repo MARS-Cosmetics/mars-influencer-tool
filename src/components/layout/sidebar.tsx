@@ -19,6 +19,7 @@ import {
   Receipt,
   Lightbulb,
   ShoppingBag,
+  Flame,
   Settings,
 } from "lucide-react";
 
@@ -44,6 +45,7 @@ const navSections = [
       { label: "Assets", href: "/assets", icon: Image },
       { label: "Content Ideas", href: "/content-ideas", icon: Lightbulb },
       { label: "Shopify Sync", href: "/settings/shopify", icon: ShoppingBag },
+      { label: "Viral Content", href: "/viral-content", icon: Flame },
     ],
   },
   {

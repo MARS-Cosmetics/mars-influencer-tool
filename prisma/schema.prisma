@@ -327,6 +327,9 @@ model Influencer {
   languages       String[]   // ['hindi', 'english', 'tamil']
   primaryLanguage String?    @map("primary_language")
 
+  // ===== INSTAGRAM AUTH =====
+  igAccessToken     String? @map("ig_access_token")
+
   // ===== INSTAGRAM METRICS =====
   igFollowerCount     Int?     @map("ig_follower_count")
   igFollowingCount    Int?     @map("ig_following_count")

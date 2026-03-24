@@ -32,7 +32,7 @@ CREATE TYPE "CollaborationStatus" AS ENUM ('draft', 'outreach', 'negotiation', '
 CREATE TYPE "Platform" AS ENUM ('instagram', 'youtube', 'twitter', 'linkedin', 'blog', 'other');
 
 -- CreateEnum
-CREATE TYPE "ContentType" AS ENUM ('reel', 'story', 'static_post', 'carousel', 'video', 'short', 'tweet', 'article', 'other');
+CREATE TYPE "ContentType" AS ENUM ('reel', 'static_post', 'carousel', 'video', 'short', 'tweet', 'article', 'other');
 
 -- CreateEnum
 CREATE TYPE "AssetStatus" AS ENUM ('pending', 'submitted', 'approved', 'revision_requested', 'published', 'rejected');
@@ -55,6 +55,21 @@ CREATE TYPE "ContractType" AS ENUM ('exclusivity', 'brand_ambassador', 'retainer
 -- CreateEnum
 CREATE TYPE "ContractStatus" AS ENUM ('draft', 'sent', 'signed', 'active', 'expired', 'terminated');
 
+-- CreateEnum
+CREATE TYPE "ContentIdeaStatus" AS ENUM ('idea', 'approved', 'briefed', 'in_production', 'published', 'rejected');
+
+-- CreateEnum
+CREATE TYPE "ApprovalStatus" AS ENUM ('auto_approved', 'pending_approval', 'approved', 'rejected');
+
+-- CreateEnum
+CREATE TYPE "PaymentTrigger" AS ENUM ('on_confirmation', 'on_content_submission', 'on_content_approval', 'on_publication', 'on_completion', 'net_15', 'net_30', 'net_45', 'custom');
+
+-- CreateEnum
+CREATE TYPE "ContentIdeaPriority" AS ENUM ('low', 'medium', 'high');
+
+-- CreateEnum
+CREATE TYPE "ContentTheme" AS ENUM ('festival', 'launch', 'tutorial', 'grwm', 'haul', 'review', 'unboxing', 'challenge', 'collab', 'seasonal', 'trending', 'educational', 'behind_the_scenes', 'other');
+
 -- CreateTable
 CREATE TABLE "users" (
     "id" UUID NOT NULL DEFAULT gen_random_uuid(),
@@ -65,6 +80,8 @@ CREATE TABLE "users" (
     "avatar_url" TEXT,
     "brand_id" UUID,
     "is_active" BOOLEAN NOT NULL DEFAULT true,
+    "approval_limit" DECIMAL(12,2),
+    "manager_id" UUID,
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ NOT NULL,
 
@@ -115,6 +132,7 @@ CREATE TABLE "influencers" (
     "content_niches" TEXT[],
     "languages" TEXT[],
     "primary_language" TEXT,
+    "ig_access_token" TEXT,
     "ig_follower_count" INTEGER,
     "ig_following_count" INTEGER,
     "ig_post_count" INTEGER,
@@ -168,8 +186,8 @@ CREATE TABLE "influencers" (
     "rate_notes" TEXT,
     "source" "InfluencerSource",
     "referred_by" TEXT,
-    "agency_name" TEXT,
-    "agency_contact" TEXT,
+    "agency_id" UUID,
+    "managed_by" TEXT DEFAULT 'self',
     "status" "InfluencerStatus" NOT NULL DEFAULT 'discovered',
     "onboarded_at" TIMESTAMPTZ,
     "blacklist_reason" TEXT,
@@ -217,11 +235,27 @@ CREATE TABLE "collaborations" (
     "status" "CollaborationStatus" NOT NULL DEFAULT 'draft',
     "agreed_amount" DECIMAL(12,2),
     "currency" TEXT DEFAULT 'INR',
+    "payment_term_id" UUID,
+    "platform" "Platform",
+    "content_type" "ContentType",
+    "deliverable_count" INTEGER,
     "deliverables" JSONB,
     "brief" TEXT,
-    "start_date" DATE,
-    "end_date" DATE,
-    "content_due_date" DATE,
+    "shopify_order_id" TEXT,
+    "shopify_order_number" TEXT,
+    "shopify_order_status" TEXT,
+    "shopify_tracking_id" TEXT,
+    "shopify_tracking_url" TEXT,
+    "shopify_fulfillment_status" TEXT,
+    "shopify_last_sync_at" TIMESTAMPTZ,
+    "due_date" DATE,
+    "agency_id" UUID,
+    "agency_name_snapshot" TEXT,
+    "agency_commission_pct" DECIMAL(5,2),
+    "approval_status" "ApprovalStatus" DEFAULT 'auto_approved',
+    "approved_by" UUID,
+    "approved_at" TIMESTAMPTZ,
+    "approval_notes" TEXT,
     "content_rating" DECIMAL(2,1),
     "rating_notes" TEXT,
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -243,6 +277,11 @@ CREATE TABLE "products" (
     "category" TEXT,
     "is_active" BOOLEAN NOT NULL DEFAULT true,
     "shopify_product_id" TEXT,
+    "shopify_variant_id" TEXT,
+    "shopify_inventory_item_id" TEXT,
+    "inventory_quantity" INTEGER,
+    "shopify_image_url" TEXT,
+    "shopify_last_sync_at" TIMESTAMPTZ,
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ NOT NULL,
 
@@ -313,7 +352,15 @@ CREATE TABLE "assets" (
     "rating_tags" TEXT[],
     "rating_notes" TEXT,
     "status" "AssetStatus" NOT NULL DEFAULT 'pending',
+    "due_date" DATE,
     "published_at" TIMESTAMPTZ,
+    "has_ad_rights" BOOLEAN NOT NULL DEFAULT false,
+    "is_viral" BOOLEAN NOT NULL DEFAULT false,
+    "viral_multiplier" DECIMAL(6,2),
+    "peak_views" INTEGER,
+    "metrics_snapshot" JSONB,
+    "baseline_metrics" JSONB,
+    "viral_detected_at" TIMESTAMPTZ,
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ NOT NULL,
 
@@ -333,8 +380,13 @@ CREATE TABLE "payments" (
     "net_amount" DECIMAL(12,2),
     "payment_method" "PaymentMethod",
     "transaction_ref" TEXT,
+    "trigger" "PaymentTrigger",
+    "installment_label" TEXT,
     "status" "PaymentStatus" NOT NULL DEFAULT 'pending',
     "paid_at" TIMESTAMPTZ,
+    "agency_id" UUID,
+    "agency_commission_pct" DECIMAL(5,2),
+    "agency_commission_amount" DECIMAL(12,2),
     "bc_entry_id" TEXT,
     "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMPTZ NOT NULL,
@@ -389,6 +441,85 @@ CREATE TABLE "contracts" (
     "created_by" UUID,
 
     CONSTRAINT "contracts_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "agencies" (
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "name" TEXT NOT NULL,
+    "contact_person" TEXT,
+    "email" TEXT,
+    "phone" TEXT,
+    "website" TEXT,
+    "address" TEXT,
+    "city" TEXT,
+    "state" TEXT,
+    "gst_number" TEXT,
+    "pan_number" TEXT,
+    "commission_pct" DECIMAL(5,2),
+    "notes" TEXT,
+    "is_active" BOOLEAN NOT NULL DEFAULT true,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT "agencies_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "payment_terms" (
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "name" TEXT NOT NULL,
+    "description" TEXT,
+    "installments" JSONB NOT NULL,
+    "is_default" BOOLEAN NOT NULL DEFAULT false,
+    "is_active" BOOLEAN NOT NULL DEFAULT true,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ NOT NULL,
+
+    CONSTRAINT "payment_terms_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "content_ideas" (
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "title" TEXT NOT NULL,
+    "description" TEXT,
+    "theme" "ContentTheme" NOT NULL DEFAULT 'other',
+    "platform" "Platform",
+    "content_type" "ContentType",
+    "status" "ContentIdeaStatus" NOT NULL DEFAULT 'idea',
+    "priority" "ContentIdeaPriority" DEFAULT 'medium',
+    "brand_id" UUID,
+    "campaign_id" UUID,
+    "collaboration_id" UUID,
+    "influencer_id" UUID,
+    "reference_urls" TEXT[],
+    "moodboard_url" TEXT,
+    "notes" TEXT,
+    "target_date" DATE,
+    "created_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMPTZ NOT NULL,
+    "created_by" UUID,
+
+    CONSTRAINT "content_ideas_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "sync_logs" (
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "sync_type" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'running',
+    "triggered_by" TEXT,
+    "started_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "completed_at" TIMESTAMPTZ,
+    "items_processed" INTEGER,
+    "items_created" INTEGER,
+    "items_updated" INTEGER,
+    "items_failed" INTEGER,
+    "error_message" TEXT,
+    "details" JSONB,
+
+    CONSTRAINT "sync_logs_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -453,6 +584,9 @@ CREATE INDEX "collaborations_campaign_id_idx" ON "collaborations"("campaign_id")
 CREATE INDEX "collaborations_status_idx" ON "collaborations"("status");
 
 -- CreateIndex
+CREATE INDEX "collaborations_agency_id_idx" ON "collaborations"("agency_id");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "products_sku_key" ON "products"("sku");
 
 -- CreateIndex
@@ -474,10 +608,16 @@ CREATE INDEX "pr_parcel_items_pr_parcel_id_idx" ON "pr_parcel_items"("pr_parcel_
 CREATE INDEX "pr_parcel_items_product_id_idx" ON "pr_parcel_items"("product_id");
 
 -- CreateIndex
+CREATE INDEX "assets_is_viral_idx" ON "assets"("is_viral");
+
+-- CreateIndex
 CREATE INDEX "payments_status_idx" ON "payments"("status");
 
 -- CreateIndex
 CREATE INDEX "payments_collaboration_id_idx" ON "payments"("collaboration_id");
+
+-- CreateIndex
+CREATE INDEX "payments_agency_id_idx" ON "payments"("agency_id");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "invoices_invoice_number_key" ON "invoices"("invoice_number");
@@ -492,6 +632,27 @@ CREATE INDEX "contracts_status_idx" ON "contracts"("status");
 CREATE INDEX "contracts_end_date_idx" ON "contracts"("end_date");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "payment_terms_name_key" ON "payment_terms"("name");
+
+-- CreateIndex
+CREATE INDEX "content_ideas_brand_id_idx" ON "content_ideas"("brand_id");
+
+-- CreateIndex
+CREATE INDEX "content_ideas_campaign_id_idx" ON "content_ideas"("campaign_id");
+
+-- CreateIndex
+CREATE INDEX "content_ideas_status_idx" ON "content_ideas"("status");
+
+-- CreateIndex
+CREATE INDEX "content_ideas_theme_idx" ON "content_ideas"("theme");
+
+-- CreateIndex
+CREATE INDEX "sync_logs_sync_type_idx" ON "sync_logs"("sync_type");
+
+-- CreateIndex
+CREATE INDEX "sync_logs_started_at_idx" ON "sync_logs"("started_at");
+
+-- CreateIndex
 CREATE INDEX "activity_log_entity_type_entity_id_idx" ON "activity_log"("entity_type", "entity_id");
 
 -- CreateIndex
@@ -501,7 +662,13 @@ CREATE INDEX "activity_log_user_id_idx" ON "activity_log"("user_id");
 ALTER TABLE "users" ADD CONSTRAINT "users_brand_id_fkey" FOREIGN KEY ("brand_id") REFERENCES "brands"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "users" ADD CONSTRAINT "users_manager_id_fkey" FOREIGN KEY ("manager_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "influencers" ADD CONSTRAINT "influencers_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "influencers" ADD CONSTRAINT "influencers_agency_id_fkey" FOREIGN KEY ("agency_id") REFERENCES "agencies"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "campaigns" ADD CONSTRAINT "campaigns_brand_id_fkey" FOREIGN KEY ("brand_id") REFERENCES "brands"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -522,7 +689,16 @@ ALTER TABLE "collaborations" ADD CONSTRAINT "collaborations_campaign_id_fkey" FO
 ALTER TABLE "collaborations" ADD CONSTRAINT "collaborations_assigned_to_fkey" FOREIGN KEY ("assigned_to") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "collaborations" ADD CONSTRAINT "collaborations_approved_by_fkey" FOREIGN KEY ("approved_by") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "collaborations" ADD CONSTRAINT "collaborations_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "collaborations" ADD CONSTRAINT "collaborations_agency_id_fkey" FOREIGN KEY ("agency_id") REFERENCES "agencies"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "collaborations" ADD CONSTRAINT "collaborations_payment_term_id_fkey" FOREIGN KEY ("payment_term_id") REFERENCES "payment_terms"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "products" ADD CONSTRAINT "products_brand_id_fkey" FOREIGN KEY ("brand_id") REFERENCES "brands"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -570,6 +746,9 @@ ALTER TABLE "payments" ADD CONSTRAINT "payments_invoice_id_fkey" FOREIGN KEY ("i
 ALTER TABLE "payments" ADD CONSTRAINT "payments_approved_by_fkey" FOREIGN KEY ("approved_by") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "payments" ADD CONSTRAINT "payments_agency_id_fkey" FOREIGN KEY ("agency_id") REFERENCES "agencies"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "invoices" ADD CONSTRAINT "invoices_collaboration_id_fkey" FOREIGN KEY ("collaboration_id") REFERENCES "collaborations"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -589,6 +768,21 @@ ALTER TABLE "contracts" ADD CONSTRAINT "contracts_collaboration_id_fkey" FOREIGN
 
 -- AddForeignKey
 ALTER TABLE "contracts" ADD CONSTRAINT "contracts_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "content_ideas" ADD CONSTRAINT "content_ideas_brand_id_fkey" FOREIGN KEY ("brand_id") REFERENCES "brands"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "content_ideas" ADD CONSTRAINT "content_ideas_campaign_id_fkey" FOREIGN KEY ("campaign_id") REFERENCES "campaigns"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "content_ideas" ADD CONSTRAINT "content_ideas_collaboration_id_fkey" FOREIGN KEY ("collaboration_id") REFERENCES "collaborations"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "content_ideas" ADD CONSTRAINT "content_ideas_influencer_id_fkey" FOREIGN KEY ("influencer_id") REFERENCES "influencers"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "content_ideas" ADD CONSTRAINT "content_ideas_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "activity_log" ADD CONSTRAINT "activity_log_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

@@ -504,12 +504,13 @@ export default async function CollaborationDetailPage(props: {
                     <TableHead>Rating</TableHead>
                     <TableHead>Published</TableHead>
                     <TableHead>Link</TableHead>
+                    <TableHead></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {collaboration.assets.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={10} className="text-center py-8 text-gray-500">
+                      <TableCell colSpan={11} className="text-center py-8 text-gray-500">
                         No content assets yet.
                       </TableCell>
                     </TableRow>
@@ -533,12 +534,13 @@ export default async function CollaborationDetailPage(props: {
                         <TableCell>{asset.reach?.toLocaleString("en-IN") ?? "-"}</TableCell>
                         <TableCell>
                           {asset.contentRating ? (
-                            <span className="flex items-center gap-1">
-                              <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500" />
-                              {String(asset.contentRating)}
+                            <span className="text-yellow-500 tracking-tight">
+                              {Array.from({ length: 5 }, (_, i) =>
+                                i < Number(asset.contentRating) ? "★" : ""
+                              ).join("")}
                             </span>
                           ) : (
-                            "-"
+                            <span className="text-gray-400">-</span>
                           )}
                         </TableCell>
                         <TableCell>{formatDate(asset.publishedAt)}</TableCell>
@@ -555,6 +557,14 @@ export default async function CollaborationDetailPage(props: {
                           ) : (
                             "-"
                           )}
+                        </TableCell>
+                        <TableCell>
+                          <Link href={`/assets/${asset.id}`}>
+                            <Button variant="outline" size="sm">
+                              <Star className="mr-1 h-3.5 w-3.5" />
+                              Rate
+                            </Button>
+                          </Link>
                         </TableCell>
                       </TableRow>
                     ))
