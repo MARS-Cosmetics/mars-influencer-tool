@@ -77,26 +77,26 @@ export async function fetchAllProducts(): Promise<ShopifyProduct[]> {
   if (USE_MOCK) return mockProducts();
 
   const products: ShopifyProduct[] = [];
-  let pageInfo: string | null = null;
-  let hasNext = true;
+  let nextUrl: string | null = `${getBaseUrl()}/products.json?limit=250`;
 
-  while (hasNext) {
-    const fetchUrl: string = pageInfo
-      ? `/products.json?limit=250&page_info=${pageInfo}`
-      : `/products.json?limit=250`;
+  while (nextUrl) {
+    const res = await fetch(nextUrl, { headers: getHeaders() });
 
-    const res = await fetch(`${getBaseUrl()}${fetchUrl}`, { headers: getHeaders() });
+    if (!res.ok) {
+      const error = await res.text();
+      throw new Error(`Shopify products fetch error (${res.status}): ${error}`);
+    }
+
     const data = await res.json();
     products.push(...(data.products || []));
 
-    // Check for pagination
+    // Shopify cursor pagination: use the full URL from Link header
     const linkHeader = res.headers.get("link");
-    if (linkHeader && linkHeader.includes('rel="next"')) {
-      const match = linkHeader.match(/page_info=([^>&]*)/);
-      pageInfo = match ? match[1] : null;
-      hasNext = !!pageInfo;
+    if (linkHeader) {
+      const nextMatch = linkHeader.match(/<([^>]+)>;\s*rel="next"/);
+      nextUrl = nextMatch ? nextMatch[1] : null;
     } else {
-      hasNext = false;
+      nextUrl = null;
     }
   }
 

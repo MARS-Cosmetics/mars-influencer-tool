@@ -32,6 +32,8 @@ export async function GET() {
     );
 
     return NextResponse.json({
+      connected: !USE_MOCK,
+      mockMode: USE_MOCK,
       shopifyConnected: !USE_MOCK,
       usingMockData: USE_MOCK,
       totalProductsSynced,

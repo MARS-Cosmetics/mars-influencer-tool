@@ -122,20 +122,28 @@ export default function ShopifySyncPage() {
     setSyncing((prev) => ({ ...prev, [type]: true }));
     try {
       const res = await fetch(endpoints[type], { method: "POST" });
+      const contentType = res.headers.get("content-type") || "";
+
+      if (!contentType.includes("application/json")) {
+        toast.error(`Sync failed: authentication error. Please refresh and try again.`);
+        return;
+      }
+
       const data = await res.json();
 
-      if (res.ok) {
+      if (res.ok && data.success !== false) {
         toast.success(
           data.message ||
-            `${type.charAt(0).toUpperCase() + type.slice(1)} sync completed`
+            `${type.charAt(0).toUpperCase() + type.slice(1)} sync completed successfully! ${data.itemsCreated ?? 0} created, ${data.itemsUpdated ?? 0} updated.`
         );
       } else {
         toast.error(data.error || `Failed to sync ${type}`);
       }
 
       await fetchStatus();
-    } catch {
-      toast.error(`Failed to sync ${type}`);
+    } catch (err) {
+      console.error(`Sync ${type} error:`, err);
+      toast.error(`Failed to sync ${type}. Check console for details.`);
     } finally {
       setSyncing((prev) => ({ ...prev, [type]: false }));
     }
