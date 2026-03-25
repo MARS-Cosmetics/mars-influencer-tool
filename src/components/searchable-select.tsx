@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import * as ReactDOM from "react-dom";
 import { Check, ChevronsUpDown, X, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -34,8 +35,22 @@ export function SearchableSelect({
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
   const containerRef = React.useRef<HTMLDivElement>(null);
+  const dropdownRef = React.useRef<HTMLDivElement>(null);
+  const [dropdownPos, setDropdownPos] = React.useState({ top: 0, left: 0, width: 0 });
 
   const selected = options.find((opt) => opt.value === value);
+
+  // Calculate dropdown position when opening
+  React.useEffect(() => {
+    if (open && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      setDropdownPos({
+        top: rect.bottom + 4,
+        left: rect.left,
+        width: rect.width,
+      });
+    }
+  }, [open]);
 
   const filtered = search
     ? options.filter((opt) => {
@@ -44,10 +59,13 @@ export function SearchableSelect({
       })
     : options;
 
-  // Close on outside click
+  // Close on outside click (check both trigger and portal dropdown)
   React.useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      const inTrigger = containerRef.current?.contains(target);
+      const inDropdown = dropdownRef.current?.contains(target);
+      if (!inTrigger && !inDropdown) {
         setOpen(false);
       }
     }
@@ -104,58 +122,69 @@ export function SearchableSelect({
         </div>
       </button>
 
-      {open && (
-        <div className="absolute z-50 mt-1 w-full rounded-lg border bg-popover shadow-md">
-          <div className="flex items-center border-b px-3">
-            <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-            <input
-              autoFocus
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={searchPlaceholder}
-              className="flex h-9 w-full bg-transparent py-2 text-sm outline-none placeholder:text-muted-foreground"
-            />
-          </div>
-          <div className="max-h-60 overflow-y-auto p-1">
-            {filtered.length === 0 ? (
-              <p className="py-4 text-center text-sm text-muted-foreground">
-                {emptyMessage}
-              </p>
-            ) : (
-              filtered.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => {
-                    onChange(option.value === value ? "" : option.value);
-                    setOpen(false);
-                    setSearch("");
-                  }}
-                  className={cn(
-                    "flex w-full items-center rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground",
-                    value === option.value && "bg-accent"
-                  )}
-                >
-                  <Check
+      {open &&
+        ReactDOM.createPortal(
+          <div
+            ref={dropdownRef}
+            style={{
+              position: "fixed",
+              top: dropdownPos.top,
+              left: dropdownPos.left,
+              width: dropdownPos.width,
+            }}
+            className="z-[9999] rounded-lg border bg-popover shadow-md"
+          >
+            <div className="flex items-center border-b px-3">
+              <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+              <input
+                autoFocus
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={searchPlaceholder}
+                className="flex h-9 w-full bg-transparent py-2 text-sm outline-none placeholder:text-muted-foreground"
+              />
+            </div>
+            <div className="max-h-60 overflow-y-auto p-1">
+              {filtered.length === 0 ? (
+                <p className="py-4 text-center text-sm text-muted-foreground">
+                  {emptyMessage}
+                </p>
+              ) : (
+                filtered.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => {
+                      onChange(option.value === value ? "" : option.value);
+                      setOpen(false);
+                      setSearch("");
+                    }}
                     className={cn(
-                      "mr-2 h-4 w-4 shrink-0",
-                      value === option.value ? "opacity-100" : "opacity-0"
+                      "flex w-full items-center rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground",
+                      value === option.value && "bg-accent"
                     )}
-                  />
-                  <div className="flex flex-col overflow-hidden">
-                    <span className="truncate">{option.label}</span>
-                    {option.sublabel && (
-                      <span className="truncate text-xs text-muted-foreground">
-                        {option.sublabel}
-                      </span>
-                    )}
-                  </div>
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-      )}
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4 shrink-0",
+                        value === option.value ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    <div className="flex flex-col overflow-hidden">
+                      <span className="truncate">{option.label}</span>
+                      {option.sublabel && (
+                        <span className="truncate text-xs text-muted-foreground">
+                          {option.sublabel}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
