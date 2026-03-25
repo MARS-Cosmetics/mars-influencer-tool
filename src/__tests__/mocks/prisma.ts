@@ -15,7 +15,7 @@ export const prismaMock = {
   paymentTerm: { findMany: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
   contract: { findMany: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn(), delete: vi.fn() },
   brand: { findMany: vi.fn(), findFirst: vi.fn() },
-  syncLog: { create: vi.fn(), update: vi.fn(), findFirst: vi.fn() },
+  syncLog: { create: vi.fn(), update: vi.fn(), findFirst: vi.fn(), findMany: vi.fn() },
   $transaction: vi.fn(),
 };
 

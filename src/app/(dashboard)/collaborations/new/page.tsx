@@ -246,7 +246,7 @@ export default function NewCollaborationPage() {
     fetch("/api/products")
       .then((r) => r.json())
       .then((data) => {
-        const list = data.products || [];
+        const list = Array.isArray(data) ? data : data.products || [];
         setProductOptions(
           list.map((p: { id: string; name: string; sku?: string; brand?: { name: string } }) => ({
             value: p.id,

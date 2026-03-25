@@ -25,10 +25,15 @@ export async function GET(request: Request) {
       where.category = category;
     }
 
+    const limit = parseInt(searchParams.get("limit") || "100", 10);
+    const offset = parseInt(searchParams.get("offset") || "0", 10);
+
     const products = await prisma.product.findMany({
       where,
       include: { brand: true },
-      orderBy: { createdAt: "desc" },
+      orderBy: { name: "asc" },
+      take: limit,
+      skip: offset,
     });
 
     return NextResponse.json(products);

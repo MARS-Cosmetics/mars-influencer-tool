@@ -35,6 +35,7 @@ beforeEach(() => {
   prismaMock.syncLog.create.mockResolvedValue({ id: 'log-1' });
   prismaMock.syncLog.update.mockResolvedValue({});
   prismaMock.syncLog.findFirst.mockResolvedValue(null);
+  prismaMock.syncLog.findMany.mockResolvedValue([]);
 
   prismaMock.brand.findFirst.mockResolvedValue({ id: 'b-1', name: 'MARS' });
 
@@ -180,5 +181,22 @@ describe('sync-status GET response shape', () => {
 
     expect(body).toHaveProperty('totalOrdersTracked');
     expect(typeof body.totalOrdersTracked).toBe('number');
+  });
+
+  it('should return products object with lastSynced and count (UI format)', async () => {
+    const res = await syncStatusGET();
+    const body = await res.json();
+
+    expect(body).toHaveProperty('products');
+    expect(body.products).toHaveProperty('lastSynced');
+    expect(body.products).toHaveProperty('count');
+  });
+
+  it('should return history array', async () => {
+    const res = await syncStatusGET();
+    const body = await res.json();
+
+    expect(body).toHaveProperty('history');
+    expect(Array.isArray(body.history)).toBe(true);
   });
 });

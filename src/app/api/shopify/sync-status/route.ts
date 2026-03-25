@@ -5,31 +5,56 @@ import { USE_MOCK } from "@/lib/shopify";
 export async function GET() {
   try {
     // Get the latest sync log for each sync type
-    const syncTypes = ["products", "inventory", "tracking"];
+    const [productsLog, inventoryLog, trackingLog] = await Promise.all([
+      prisma.syncLog.findFirst({
+        where: { syncType: "products" },
+        orderBy: { startedAt: "desc" },
+      }),
+      prisma.syncLog.findFirst({
+        where: { syncType: "inventory" },
+        orderBy: { startedAt: "desc" },
+      }),
+      prisma.syncLog.findFirst({
+        where: { syncType: "tracking" },
+        orderBy: { startedAt: "desc" },
+      }),
+    ]);
 
-    const latestSyncs = await Promise.all(
-      syncTypes.map(async (syncType) => {
-        const log = await prisma.syncLog.findFirst({
-          where: { syncType },
-          orderBy: { startedAt: "desc" },
-        });
-        return { syncType, log };
-      })
-    );
-
-    // Count total synced products (those with a shopifyProductId)
+    // Count total synced products
     const totalProductsSynced = await prisma.product.count({
       where: { shopifyProductId: { not: null } },
     });
 
-    // Count tracked orders (collaborations with a shopifyOrderId)
+    // Count tracked orders
     const totalOrdersTracked = await prisma.collaboration.count({
       where: { shopifyOrderId: { not: null } },
     });
 
-    const syncStatus = Object.fromEntries(
-      latestSyncs.map(({ syncType, log }) => [syncType, log])
-    );
+    // Get recent sync history (last 10 entries)
+    const recentLogs = await prisma.syncLog.findMany({
+      orderBy: { startedAt: "desc" },
+      take: 10,
+    });
+
+    const history = recentLogs.map((log) => {
+      const duration =
+        log.completedAt && log.startedAt
+          ? `${Math.round((log.completedAt.getTime() - log.startedAt.getTime()) / 1000)}s`
+          : null;
+
+      return {
+        id: log.id,
+        type: log.syncType,
+        status: log.status,
+        startedAt: log.startedAt.toISOString(),
+        duration,
+        itemsProcessed: log.itemsProcessed ?? 0,
+        itemsCreated: log.itemsCreated ?? 0,
+        itemsUpdated: log.itemsUpdated ?? 0,
+        itemsFailed: log.itemsFailed ?? 0,
+        triggeredBy: log.triggeredBy ?? "manual",
+      };
+    });
 
     return NextResponse.json({
       connected: !USE_MOCK,
@@ -38,7 +63,25 @@ export async function GET() {
       usingMockData: USE_MOCK,
       totalProductsSynced,
       totalOrdersTracked,
-      latestSyncs: syncStatus,
+      // Shape the UI expects
+      products: {
+        lastSynced: productsLog?.completedAt?.toISOString() ?? null,
+        count: totalProductsSynced,
+      },
+      orders: {
+        lastSynced: trackingLog?.completedAt?.toISOString() ?? null,
+        count: totalOrdersTracked,
+      },
+      inventory: {
+        lastSynced: inventoryLog?.completedAt?.toISOString() ?? null,
+      },
+      history,
+      // Raw sync logs for backward compat
+      latestSyncs: {
+        products: productsLog,
+        inventory: inventoryLog,
+        tracking: trackingLog,
+      },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
