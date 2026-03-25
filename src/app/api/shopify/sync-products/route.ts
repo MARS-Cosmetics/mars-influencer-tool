@@ -30,7 +30,7 @@ export async function POST() {
         const imageSrc = product.image?.src ?? product.images?.[0]?.src ?? null;
 
         const existing = await prisma.product.findFirst({
-          where: { shopifyProductId: String(product.id) },
+          where: { shopifyVariantId: String(variant.id) },
         });
 
         const data = {
