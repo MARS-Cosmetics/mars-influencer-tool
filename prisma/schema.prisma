@@ -900,11 +900,34 @@ model Agency {
   address       String?
   city          String?
   state         String?
+  pincode       String?
   gstNumber     String?  @map("gst_number")
   panNumber     String?  @map("pan_number")
   commissionPct Decimal? @map("commission_pct") @db.Decimal(5, 2) // default commission %
   notes         String?
   isActive      Boolean  @default(true) @map("is_active")
+
+  // New KYC & Business fields
+  businessType      String?  @map("business_type") // Proprietorship, Partnership, LLP, Pvt Ltd, etc.
+  yearsInBusiness   Int?     @map("years_in_business")
+  annualTurnover    String?  @map("annual_turnover") // range bracket
+  directorName      String?  @map("director_name")
+  directorAadhar    String?  @map("director_aadhar")
+
+  // Bank Details
+  bankName          String?  @map("bank_name")
+  bankAccountNumber String?  @map("bank_account_number")
+  bankIfsc          String?  @map("bank_ifsc")
+  bankBranch        String?  @map("bank_branch")
+  bankAccountType   String?  @map("bank_account_type") // Current / Savings
+
+  // Document uploads (file paths/URLs)
+  panDocumentUrl        String?  @map("pan_document_url")
+  gstDocumentUrl        String?  @map("gst_document_url")
+  udhyamCertificateUrl  String?  @map("udhyam_certificate_url")
+  agencyRosterUrl       String?  @map("agency_roster_url")
+  aadharDocumentUrl     String?  @map("aadhar_document_url")
+
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 

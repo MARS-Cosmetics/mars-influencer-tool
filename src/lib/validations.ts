@@ -44,6 +44,19 @@ export function validateInstagramHandle(handle: string): boolean {
   return /^[a-zA-Z0-9._]{1,30}$/.test(cleaned);
 }
 
+// Aadhar number: 12 digits (with optional spaces)
+export function validateAadhar(aadhar: string): boolean {
+  if (!aadhar) return true;
+  const cleaned = aadhar.replace(/\s/g, "");
+  return /^\d{12}$/.test(cleaned);
+}
+
+// Bank account number: 9-18 digits
+export function validateBankAccount(account: string): boolean {
+  if (!account) return true;
+  return /^\d{9,18}$/.test(account);
+}
+
 // UPI ID: username@bankcode
 export function validateUPI(upi: string): boolean {
   if (!upi) return true;

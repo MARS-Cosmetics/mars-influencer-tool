@@ -87,3 +87,33 @@ export const CONTENT_LANGUAGES = [
   "haryanvi",
   "tulu",
 ] as const;
+
+export const BUSINESS_TYPES = [
+  "Proprietorship",
+  "Partnership",
+  "LLP (Limited Liability Partnership)",
+  "Private Limited",
+  "Public Limited",
+  "One Person Company (OPC)",
+  "HUF (Hindu Undivided Family)",
+  "Trust",
+  "Society",
+  "Section 8 Company",
+] as const;
+
+export const ANNUAL_TURNOVER_RANGES = [
+  "Below ₹10 Lakhs",
+  "₹10 Lakhs - ₹50 Lakhs",
+  "₹50 Lakhs - ₹1 Crore",
+  "₹1 Crore - ₹5 Crore",
+  "₹5 Crore - ₹10 Crore",
+  "₹10 Crore - ₹25 Crore",
+  "₹25 Crore - ₹50 Crore",
+  "₹50 Crore - ₹100 Crore",
+  "Above ₹100 Crore",
+] as const;
+
+export const BANK_ACCOUNT_TYPES = [
+  "Current",
+  "Savings",
+] as const;
