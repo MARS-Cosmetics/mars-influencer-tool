@@ -87,6 +87,7 @@ export default async function AssetDetailPage(props: {
         include: {
           brand: true,
           campaign: true,
+          _count: { select: { assets: true } },
         },
       },
     },
@@ -94,6 +95,19 @@ export default async function AssetDetailPage(props: {
 
   if (!asset) {
     notFound();
+  }
+
+  // CPV Calculation
+  const isBarter = asset.collaboration?.type === "barter" || asset.collaboration?.type === "pr_gifting";
+  let cpvDisplay = "—";
+  if (isBarter) {
+    cpvDisplay = "Barter";
+  } else if (asset.views && asset.views > 0 && asset.collaboration?.agreedAmount) {
+    const totalAmount = Number(asset.collaboration.agreedAmount);
+    const assetCount = asset.collaboration._count?.assets || 1;
+    const perAssetCost = totalAmount / assetCount;
+    const cpv = perAssetCost / asset.views;
+    cpvDisplay = `₹${cpv < 1 ? cpv.toFixed(3) : cpv.toFixed(2)}`;
   }
 
   const metrics = [
@@ -258,6 +272,14 @@ export default async function AssetDetailPage(props: {
                     ? engagementRate.toFixed(2) + "%"
                     : "-"}
                 </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">CPV (Cost Per View)</p>
+                {cpvDisplay === "Barter" ? (
+                  <Badge className="bg-purple-100 text-purple-700 mt-1">Barter</Badge>
+                ) : (
+                  <p className="text-lg font-semibold">{cpvDisplay}</p>
+                )}
               </div>
             </div>
           </CardContent>

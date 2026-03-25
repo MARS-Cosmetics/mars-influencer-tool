@@ -107,6 +107,9 @@ export default async function CollaborationsPage(props: {
       assignee: {
         select: { id: true, name: true },
       },
+      assets: {
+        select: { views: true },
+      },
     },
   });
 
@@ -199,6 +202,7 @@ export default async function CollaborationsPage(props: {
                 <TableHead>Type</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Agreed Amount</TableHead>
+                <TableHead>CPV</TableHead>
                 <TableHead>Assigned To</TableHead>
                 <TableHead>Content Due</TableHead>
               </TableRow>
@@ -248,6 +252,17 @@ export default async function CollaborationsPage(props: {
                       </span>
                     </TableCell>
                     <TableCell>{formatCurrency(collab.agreedAmount as unknown as number)}</TableCell>
+                    <TableCell>
+                      {(() => {
+                        if (collab.type === "barter" || collab.type === "pr_gifting") {
+                          return <Badge className="bg-purple-100 text-purple-700">Barter</Badge>;
+                        }
+                        const totalViews = collab.assets.reduce((sum: number, a: { views: number | null }) => sum + (a.views || 0), 0);
+                        if (!totalViews || !collab.agreedAmount) return "—";
+                        const cpv = Number(collab.agreedAmount) / totalViews;
+                        return `₹${cpv < 1 ? cpv.toFixed(3) : cpv.toFixed(2)}`;
+                      })()}
+                    </TableCell>
                     <TableCell>{collab.assignee.name}</TableCell>
                     <TableCell>{formatDate(collab.dueDate)}</TableCell>
                   </TableRow>

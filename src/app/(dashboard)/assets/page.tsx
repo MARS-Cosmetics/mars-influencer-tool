@@ -14,7 +14,21 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Plus, Search, ExternalLink } from "lucide-react";
+import { Plus, Search, ExternalLink, IndianRupee } from "lucide-react";
+
+function getCPV(asset: { views: number | null; collaboration: { type: string; agreedAmount: unknown; _count: { assets: number } } | null }): string {
+  if (!asset.collaboration) return "-";
+  if (asset.collaboration.type === "barter" || asset.collaboration.type === "pr_gifting") return "Barter";
+  if (!asset.views || asset.views === 0) return "—";
+  const totalAmount = Number(asset.collaboration.agreedAmount || 0);
+  if (totalAmount === 0) return "—";
+  const assetCount = asset.collaboration._count.assets || 1;
+  const perAssetCost = totalAmount / assetCount;
+  const cpv = perAssetCost / asset.views;
+  if (cpv < 0.01) return `₹${cpv.toFixed(4)}`;
+  if (cpv < 1) return `₹${cpv.toFixed(2)}`;
+  return `₹${cpv.toFixed(2)}`;
+}
 
 function formatNumber(value: number | null | undefined): string {
   if (value === null || value === undefined) return "-";
@@ -83,7 +97,9 @@ export default async function AssetsPage({
         select: {
           id: true,
           type: true,
+          agreedAmount: true,
           brand: { select: { name: true } },
+          _count: { select: { assets: true } },
         },
       },
     },
@@ -157,6 +173,7 @@ export default async function AssetsPage({
               <TableHead>Content Type</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Views</TableHead>
+              <TableHead className="text-right">CPV</TableHead>
               <TableHead className="text-right">Likes</TableHead>
               <TableHead className="text-right">Comments</TableHead>
               <TableHead className="text-right">Rating</TableHead>
@@ -167,7 +184,7 @@ export default async function AssetsPage({
           <TableBody>
             {assets.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} className="text-center text-gray-500 py-8">
+                <TableCell colSpan={11} className="text-center text-gray-500 py-8">
                   No assets found.
                 </TableCell>
               </TableRow>
@@ -194,6 +211,13 @@ export default async function AssetsPage({
                   </TableCell>
                   <TableCell className="text-right">
                     {formatNumber(asset.views)}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {getCPV(asset) === "Barter" ? (
+                      <Badge className="bg-purple-100 text-purple-700">Barter</Badge>
+                    ) : (
+                      <span className="text-sm font-medium">{getCPV(asset)}</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-right">
                     {formatNumber(asset.likes)}
