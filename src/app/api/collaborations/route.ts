@@ -228,7 +228,7 @@ export async function POST(request: NextRequest) {
           amount: Math.round((totalAmount * inst.percentage) / 100 * 100) / 100,
           currency: body.currency || "INR",
           status: "pending",
-          trigger: inst.trigger,
+          trigger: inst.trigger as unknown as "on_confirmation" | "on_content_submission" | "on_content_approval" | "on_publication" | "on_completion" | "net_15" | "net_30" | "net_45" | "custom",
           installmentLabel: inst.label,
           // Copy agency info if present
           ...(body.agencyId ? {
@@ -240,7 +240,8 @@ export async function POST(request: NextRequest) {
           } : {}),
         }));
 
-        await prisma.payment.createMany({ data: paymentRecords });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await prisma.payment.createMany({ data: paymentRecords as any });
       }
     }
 

@@ -81,11 +81,11 @@ export async function fetchAllProducts(): Promise<ShopifyProduct[]> {
   let hasNext = true;
 
   while (hasNext) {
-    const url = pageInfo
+    const fetchUrl: string = pageInfo
       ? `/products.json?limit=250&page_info=${pageInfo}`
       : `/products.json?limit=250`;
 
-    const res = await fetch(`${getBaseUrl()}${url}`, { headers: getHeaders() });
+    const res = await fetch(`${getBaseUrl()}${fetchUrl}`, { headers: getHeaders() });
     const data = await res.json();
     products.push(...(data.products || []));
 

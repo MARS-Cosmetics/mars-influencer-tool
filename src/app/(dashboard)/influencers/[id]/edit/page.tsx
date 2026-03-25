@@ -16,7 +16,7 @@ import {
 import { ArrowLeft, Loader2, Search } from "lucide-react";
 import Link from "next/link";
 import { validatePhone, validateEmail, validatePAN, validateGST, validatePincode, validateIFSC, validateUPI, validateInstagramHandle } from "@/lib/validations";
-import { INDIAN_STATES, CONTENT_LANGUAGES } from "@/lib/constants";
+import { INDIAN_STATES, CONTENT_LANGUAGES, INFLUENCER_CATEGORIES, CONTENT_NICHES } from "@/lib/constants";
 import { SearchableSelect, SearchableSelectOption } from "@/components/searchable-select";
 
 type InfluencerData = Record<string, unknown>;
@@ -669,24 +669,54 @@ export default function EditInfluencerPage() {
               </select>
             </div>
             <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="categories">Categories</Label>
-              <Input
-                id="categories"
-                name="categories"
-                value={form.categories}
-                onChange={handleInputChange}
-                placeholder="skincare, haircare, wellness (comma-separated)"
-              />
+              <Label>Categories</Label>
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mt-1">
+                {INFLUENCER_CATEGORIES.map((cat) => {
+                  const selected = form.categories.split(",").map(s => s.trim()).filter(Boolean);
+                  return (
+                    <label key={cat} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selected.includes(cat)}
+                        onChange={() => {
+                          const current = form.categories.split(",").map(s => s.trim()).filter(Boolean);
+                          const updated = current.includes(cat)
+                            ? current.filter(c => c !== cat)
+                            : [...current, cat];
+                          setForm(prev => ({ ...prev, categories: updated.join(", ") }));
+                        }}
+                        className="rounded border-input"
+                      />
+                      {cat}
+                    </label>
+                  );
+                })}
+              </div>
             </div>
             <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="contentNiches">Content Niches</Label>
-              <Input
-                id="contentNiches"
-                name="contentNiches"
-                value={form.contentNiches}
-                onChange={handleInputChange}
-                placeholder="GRWM, reviews, tutorials (comma-separated)"
-              />
+              <Label>Content Niches</Label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-1">
+                {CONTENT_NICHES.map((niche) => {
+                  const selected = form.contentNiches.split(",").map(s => s.trim()).filter(Boolean);
+                  return (
+                    <label key={niche} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selected.includes(niche)}
+                        onChange={() => {
+                          const current = form.contentNiches.split(",").map(s => s.trim()).filter(Boolean);
+                          const updated = current.includes(niche)
+                            ? current.filter(n => n !== niche)
+                            : [...current, niche];
+                          setForm(prev => ({ ...prev, contentNiches: updated.join(", ") }));
+                        }}
+                        className="rounded border-input"
+                      />
+                      {niche}
+                    </label>
+                  );
+                })}
+              </div>
             </div>
             <div className="space-y-2 sm:col-span-2">
               <Label>Languages</Label>
