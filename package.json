@@ -10,7 +10,8 @@
     "db:seed": "npx tsx prisma/seed.ts",
     "db:migrate": "npx prisma migrate dev",
     "db:studio": "npx prisma studio",
-    "db:generate": "npx prisma generate && echo 'export * from \"./client\";' > src/generated/prisma/index.ts",
+    "db:generate": "npx prisma generate && node prisma/postgenerate.mjs",
+    "postinstall": "npx prisma generate && node prisma/postgenerate.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
