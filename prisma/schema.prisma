@@ -269,6 +269,12 @@ model Brand {
   slug        String   @unique
   logoUrl     String?  @map("logo_url")
   description String?
+
+  // Shopify credentials (per brand)
+  shopifyStoreUrl     String?  @map("shopify_store_url")
+  shopifyAccessToken  String?  @map("shopify_access_token")
+  shopifyApiVersion   String?  @map("shopify_api_version") @default("2024-10")
+
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 

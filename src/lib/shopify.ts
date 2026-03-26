@@ -1,37 +1,59 @@
 /**
  * Shopify Admin API Client
  *
- * Auto-toggles between mock and real API based on environment variables.
- * Set SHOPIFY_STORE_URL and SHOPIFY_ACCESS_TOKEN in .env to use real API.
- * Without credentials, returns realistic mock data for development.
+ * Supports brand-level Shopify credentials (each brand can have its own store).
+ * Falls back to env vars if no brand credentials are provided.
+ * Without any credentials, returns realistic mock data for development.
  */
 
-const SHOPIFY_STORE_URL = process.env.SHOPIFY_STORE_URL;
-const SHOPIFY_ACCESS_TOKEN = process.env.SHOPIFY_ACCESS_TOKEN;
-const SHOPIFY_API_VERSION = process.env.SHOPIFY_API_VERSION || "2024-10";
+// Default credentials from env (fallback)
+const DEFAULT_STORE_URL = process.env.SHOPIFY_STORE_URL;
+const DEFAULT_ACCESS_TOKEN = process.env.SHOPIFY_ACCESS_TOKEN;
+const DEFAULT_API_VERSION = process.env.SHOPIFY_API_VERSION || "2024-10";
 
-export const USE_MOCK = !SHOPIFY_STORE_URL || !SHOPIFY_ACCESS_TOKEN;
+export const USE_MOCK = !DEFAULT_STORE_URL || !DEFAULT_ACCESS_TOKEN;
 
-function getBaseUrl(): string {
-  return `https://${SHOPIFY_STORE_URL}/admin/api/${SHOPIFY_API_VERSION}`;
+/** Brand-level Shopify credentials */
+export interface ShopifyCredentials {
+  storeUrl: string;
+  accessToken: string;
+  apiVersion?: string;
 }
 
-function getHeaders(): Record<string, string> {
+function getCredentials(brandCreds?: ShopifyCredentials | null) {
+  const storeUrl = brandCreds?.storeUrl || DEFAULT_STORE_URL;
+  const accessToken = brandCreds?.accessToken || DEFAULT_ACCESS_TOKEN;
+  const apiVersion = brandCreds?.apiVersion || DEFAULT_API_VERSION;
+  return { storeUrl, accessToken, apiVersion };
+}
+
+function getBaseUrl(brandCreds?: ShopifyCredentials | null): string {
+  const { storeUrl, apiVersion } = getCredentials(brandCreds);
+  return `https://${storeUrl}/admin/api/${apiVersion}`;
+}
+
+function getHeaders(brandCreds?: ShopifyCredentials | null): Record<string, string> {
+  const { accessToken } = getCredentials(brandCreds);
   return {
-    "X-Shopify-Access-Token": SHOPIFY_ACCESS_TOKEN!,
+    "X-Shopify-Access-Token": accessToken!,
     "Content-Type": "application/json",
   };
+}
+
+function isMock(brandCreds?: ShopifyCredentials | null): boolean {
+  const { storeUrl, accessToken } = getCredentials(brandCreds);
+  return !storeUrl || !accessToken;
 }
 
 // ============================================================
 // Generic Shopify API caller
 // ============================================================
 
-async function shopifyFetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  const url = `${getBaseUrl()}${endpoint}`;
+async function shopifyFetch<T>(endpoint: string, options?: RequestInit, brandCreds?: ShopifyCredentials | null): Promise<T> {
+  const url = `${getBaseUrl(brandCreds)}${endpoint}`;
   const res = await fetch(url, {
     ...options,
-    headers: { ...getHeaders(), ...options?.headers },
+    headers: { ...getHeaders(brandCreds), ...options?.headers },
   });
 
   if (!res.ok) {
@@ -73,14 +95,14 @@ export interface ShopifyImage {
   src: string;
 }
 
-export async function fetchAllProducts(): Promise<ShopifyProduct[]> {
-  if (USE_MOCK) return mockProducts();
+export async function fetchAllProducts(brandCreds?: ShopifyCredentials | null): Promise<ShopifyProduct[]> {
+  if (isMock(brandCreds)) return mockProducts();
 
   const products: ShopifyProduct[] = [];
-  let nextUrl: string | null = `${getBaseUrl()}/products.json?limit=250`;
+  let nextUrl: string | null = `${getBaseUrl(brandCreds)}/products.json?limit=250`;
 
   while (nextUrl) {
-    const res = await fetch(nextUrl, { headers: getHeaders() });
+    const res = await fetch(nextUrl, { headers: getHeaders(brandCreds) });
 
     if (!res.ok) {
       const error = await res.text();
@@ -114,16 +136,19 @@ export interface ShopifyInventoryLevel {
 }
 
 export async function fetchInventoryLevels(
-  inventoryItemIds: number[]
+  inventoryItemIds: number[],
+  brandCreds?: ShopifyCredentials | null
 ): Promise<ShopifyInventoryLevel[]> {
-  if (USE_MOCK) return mockInventoryLevels(inventoryItemIds);
+  if (isMock(brandCreds)) return mockInventoryLevels(inventoryItemIds);
 
   // Shopify allows max 50 items per request
   const levels: ShopifyInventoryLevel[] = [];
   for (let i = 0; i < inventoryItemIds.length; i += 50) {
     const batch = inventoryItemIds.slice(i, i + 50);
     const data = await shopifyFetch<{ inventory_levels: ShopifyInventoryLevel[] }>(
-      `/inventory_levels.json?inventory_item_ids=${batch.join(",")}`
+      `/inventory_levels.json?inventory_item_ids=${batch.join(",")}`,
+      undefined,
+      brandCreds
     );
     levels.push(...(data.inventory_levels || []));
   }
@@ -182,31 +207,35 @@ export interface ShopifyFulfillment {
   tracking_company: string | null;
 }
 
-export async function createOrder(input: ShopifyOrderInput): Promise<ShopifyOrder> {
-  if (USE_MOCK) return mockCreateOrder(input);
+export async function createOrder(input: ShopifyOrderInput, brandCreds?: ShopifyCredentials | null): Promise<ShopifyOrder> {
+  if (isMock(brandCreds)) return mockCreateOrder(input);
 
   const data = await shopifyFetch<{ order: ShopifyOrder }>("/orders.json", {
     method: "POST",
     body: JSON.stringify({ order: input }),
-  });
+  }, brandCreds);
 
   return data.order;
 }
 
-export async function fetchOrder(orderId: string): Promise<ShopifyOrder> {
-  if (USE_MOCK) return mockFetchOrder(orderId);
+export async function fetchOrder(orderId: string, brandCreds?: ShopifyCredentials | null): Promise<ShopifyOrder> {
+  if (isMock(brandCreds)) return mockFetchOrder(orderId);
 
   const data = await shopifyFetch<{ order: ShopifyOrder }>(
-    `/orders/${orderId}.json`
+    `/orders/${orderId}.json`,
+    undefined,
+    brandCreds
   );
   return data.order;
 }
 
-export async function fetchOrdersByIds(orderIds: string[]): Promise<ShopifyOrder[]> {
-  if (USE_MOCK) return orderIds.map((id) => mockFetchOrder(id));
+export async function fetchOrdersByIds(orderIds: string[], brandCreds?: ShopifyCredentials | null): Promise<ShopifyOrder[]> {
+  if (isMock(brandCreds)) return orderIds.map((id) => mockFetchOrder(id));
 
   const data = await shopifyFetch<{ orders: ShopifyOrder[] }>(
-    `/orders.json?ids=${orderIds.join(",")}&status=any`
+    `/orders.json?ids=${orderIds.join(",")}&status=any`,
+    undefined,
+    brandCreds
   );
   return data.orders || [];
 }
