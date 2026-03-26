@@ -6,26 +6,26 @@ import { useRouter } from "next/navigation";
 
 const statusOptions = [
   { value: "draft", label: "Draft" },
-  { value: "proposed", label: "Proposed" },
-  { value: "negotiating", label: "Negotiating" },
+  { value: "outreach", label: "Outreach" },
+  { value: "negotiation", label: "Negotiation" },
   { value: "confirmed", label: "Confirmed" },
   { value: "in_progress", label: "In Progress" },
-  { value: "content_review", label: "Content Review" },
+  { value: "content_submitted", label: "Content Submitted" },
+  { value: "content_approved", label: "Content Approved" },
   { value: "completed", label: "Completed" },
   { value: "cancelled", label: "Cancelled" },
-  { value: "on_hold", label: "On Hold" },
 ];
 
 const statusColors: Record<string, string> = {
   draft: "bg-gray-100 text-gray-700 border-gray-300",
-  proposed: "bg-blue-100 text-blue-700 border-blue-300",
-  negotiating: "bg-yellow-100 text-yellow-700 border-yellow-300",
+  outreach: "bg-blue-100 text-blue-700 border-blue-300",
+  negotiation: "bg-yellow-100 text-yellow-700 border-yellow-300",
   confirmed: "bg-green-100 text-green-700 border-green-300",
   in_progress: "bg-indigo-100 text-indigo-700 border-indigo-300",
-  content_review: "bg-purple-100 text-purple-700 border-purple-300",
+  content_submitted: "bg-purple-100 text-purple-700 border-purple-300",
+  content_approved: "bg-teal-100 text-teal-700 border-teal-300",
   completed: "bg-emerald-100 text-emerald-700 border-emerald-300",
   cancelled: "bg-red-100 text-red-700 border-red-300",
-  on_hold: "bg-orange-100 text-orange-700 border-orange-300",
 };
 
 interface InlineStatusSelectProps {
