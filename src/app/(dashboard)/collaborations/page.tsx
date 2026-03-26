@@ -219,22 +219,24 @@ export default async function CollaborationsPage(props: {
                 collaborations.map((collab) => (
                   <TableRow key={collab.id}>
                     <TableCell>
-                      <Link
-                        href={`/collaborations/${collab.id}`}
-                        className="font-medium text-blue-600 hover:underline"
-                      >
-                        {collab.influencer.name}
-                      </Link>
-                      {collab.influencer.instagramHandle && (
-                        <a
-                          href={`https://instagram.com/${collab.influencer.instagramHandle}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-[#A6192E] hover:underline"
+                      <div className="flex flex-col gap-0.5">
+                        <Link
+                          href={`/collaborations/${collab.id}`}
+                          className="font-medium text-blue-600 hover:underline"
                         >
-                          @{collab.influencer.instagramHandle}
-                        </a>
-                      )}
+                          {collab.influencer.name}
+                        </Link>
+                        {collab.influencer.instagramHandle && (
+                          <a
+                            href={`https://instagram.com/${collab.influencer.instagramHandle}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-[#A6192E] hover:underline"
+                          >
+                            @{collab.influencer.instagramHandle}
+                          </a>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>{collab.brand.name}</TableCell>
                     <TableCell>
