@@ -110,13 +110,23 @@ export async function PUT(
       }
     }
 
-    // Check if status is being changed to "confirmed" — trigger Shopify order
-    const previousCollab = body.status === "confirmed"
-      ? await prisma.collaboration.findUnique({
-          where: { id },
-          select: { status: true, shopifyOrderId: true },
-        })
-      : null;
+    // Fetch current state before updating
+    const previousCollab = await prisma.collaboration.findUnique({
+      where: { id },
+      select: { status: true, shopifyOrderId: true, dueDate: true },
+    });
+
+    // Enforce due date for confirmed and beyond
+    const confirmedStatuses = ["confirmed", "in_progress", "content_submitted", "content_approved", "completed"];
+    if (body.status && confirmedStatuses.includes(body.status)) {
+      const currentDueDate = body.dueDate || previousCollab?.dueDate;
+      if (!currentDueDate) {
+        return NextResponse.json(
+          { error: "Due date is required before moving to this status", requiresDueDate: true },
+          { status: 400 }
+        );
+      }
+    }
 
     const collaboration = await prisma.collaboration.update({
       where: { id },
@@ -126,6 +136,41 @@ export async function PUT(
         brand: { select: { id: true, name: true } },
       },
     });
+
+    // Log status change in activity log
+    if (body.status && previousCollab && body.status !== previousCollab.status) {
+      await prisma.activityLog.create({
+        data: {
+          entityType: "collaboration",
+          entityId: id,
+          action: "status_change",
+          field: "status",
+          oldValue: previousCollab.status,
+          newValue: body.status,
+          description: `Status changed from ${previousCollab.status} to ${body.status}`,
+        },
+      });
+    }
+
+    // Log other field changes
+    if (previousCollab) {
+      const trackFields = ["agreedAmount", "dueDate", "brief", "type"];
+      for (const field of trackFields) {
+        if (body[field] !== undefined && String(body[field]) !== String((previousCollab as Record<string, unknown>)[field])) {
+          await prisma.activityLog.create({
+            data: {
+              entityType: "collaboration",
+              entityId: id,
+              action: "field_update",
+              field,
+              oldValue: String((previousCollab as Record<string, unknown>)[field] ?? ""),
+              newValue: String(body[field] ?? ""),
+              description: `${field} updated`,
+            },
+          });
+        }
+      }
+    }
 
     // Auto-create Shopify order when status changes to "confirmed" and no order exists
     if (

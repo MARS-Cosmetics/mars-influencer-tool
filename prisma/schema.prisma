@@ -1050,15 +1050,19 @@ model SyncLog {
 
 model ActivityLog {
   id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId     String   @map("user_id") @db.Uuid
-  entityType String   @map("entity_type")
+  userId     String?  @map("user_id") @db.Uuid
+  entityType String   @map("entity_type") // collaboration, influencer, etc.
   entityId   String   @map("entity_id") @db.Uuid
-  action     String
+  action     String   // status_change, field_update, product_added, comment, created, etc.
+  field      String?  // which field changed (e.g. "status", "agreedAmount")
+  oldValue   String?  @map("old_value")
+  newValue   String?  @map("new_value")
+  description String? // human-readable summary
   changes    Json?
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
   // Relations
-  user User @relation(fields: [userId], references: [id])
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([entityType, entityId])
   @@index([userId])

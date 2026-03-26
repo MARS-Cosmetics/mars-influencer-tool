@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 const statusOptions = [
@@ -35,6 +36,7 @@ interface InlineStatusSelectProps {
 export function InlineStatusSelect({ collaborationId, currentStatus }: InlineStatusSelectProps) {
   const [status, setStatus] = useState(currentStatus);
   const [isUpdating, setIsUpdating] = useState(false);
+  const router = useRouter();
 
   async function handleChange(newStatus: string) {
     if (newStatus === status) return;
@@ -51,14 +53,23 @@ export function InlineStatusSelect({ collaborationId, currentStatus }: InlineSta
       });
 
       if (!res.ok) {
-        throw new Error("Failed to update status");
+        const data = await res.json().catch(() => ({}));
+        if (data.requiresDueDate) {
+          setStatus(previousStatus);
+          toast.error("Due date is required before moving to this status. Redirecting...");
+          setTimeout(() => {
+            router.push(`/collaborations/${collaborationId}?needsDueDate=true`);
+          }, 1500);
+          return;
+        }
+        throw new Error(data.error || "Failed to update status");
       }
 
       const label = statusOptions.find((s) => s.value === newStatus)?.label || newStatus;
       toast.success(`Status updated to ${label}`);
-    } catch {
+    } catch (err) {
       setStatus(previousStatus);
-      toast.error("Failed to update status");
+      toast.error(err instanceof Error ? err.message : "Failed to update status");
     } finally {
       setIsUpdating(false);
     }

@@ -124,6 +124,7 @@ const parcelStatusColors: Record<string, string> = {
 
 export default async function CollaborationDetailPage(props: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ needsDueDate?: string }>;
 }) {
   const { id } = await props.params;
 
@@ -170,6 +171,18 @@ export default async function CollaborationDetailPage(props: {
     notFound();
   }
 
+  // Fetch activity log
+  const activityLogs = await prisma.activityLog.findMany({
+    where: { entityType: "collaboration", entityId: id },
+    orderBy: { createdAt: "desc" },
+    include: { user: { select: { id: true, name: true } } },
+    take: 50,
+  });
+
+  // Check if due date warning is needed
+  const searchParams = await props.searchParams;
+  const needsDueDate = searchParams?.needsDueDate === "true";
+
   const deliverables = collaboration.deliverables as unknown;
 
   return (
@@ -212,8 +225,19 @@ export default async function CollaborationDetailPage(props: {
         </div>
       </div>
 
+      {/* Due date warning */}
+      {needsDueDate && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 flex items-center gap-3">
+          <Calendar className="h-5 w-5 text-amber-600 shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-amber-800">Due date required</p>
+            <p className="text-xs text-amber-700">Please set a due date in the Overview tab before advancing the status to Confirmed or beyond.</p>
+          </div>
+        </div>
+      )}
+
       {/* Tabs */}
-      <Tabs defaultValue="overview">
+      <Tabs defaultValue={needsDueDate ? "overview" : "overview"}>
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="products">
@@ -231,6 +255,9 @@ export default async function CollaborationDetailPage(props: {
           <TabsTrigger value="parcels">
             <Truck className="mr-1 h-3.5 w-3.5" />
             PR Parcels ({collaboration.prParcels.length})
+          </TabsTrigger>
+          <TabsTrigger value="activity">
+            Activity Log ({activityLogs.length})
           </TabsTrigger>
         </TabsList>
 
@@ -707,6 +734,63 @@ export default async function CollaborationDetailPage(props: {
                     </CardContent>
                   </Card>
                 ))
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Activity Log Tab */}
+        <TabsContent value="activity">
+          <Card>
+            <CardHeader>
+              <CardTitle>Activity Log</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {activityLogs.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-8 text-center">No activity recorded yet.</p>
+              ) : (
+                <div className="space-y-4">
+                  {activityLogs.map((log) => {
+                    const actionIcons: Record<string, string> = {
+                      status_change: "🔄",
+                      field_update: "✏️",
+                      product_added: "📦",
+                      product_removed: "❌",
+                      created: "🆕",
+                      comment: "💬",
+                    };
+                    const icon = actionIcons[log.action] || "📝";
+
+                    return (
+                      <div key={log.id} className="flex gap-3 border-b pb-3 last:border-0">
+                        <div className="mt-0.5 text-lg">{icon}</div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-medium">
+                              {log.description || log.action.replace(/_/g, " ")}
+                            </span>
+                            {log.field === "status" && log.oldValue && log.newValue && (
+                              <span className="text-xs text-muted-foreground">
+                                <span className="inline-flex items-center rounded-full bg-gray-100 px-1.5 py-0.5 text-xs">{log.oldValue}</span>
+                                {" → "}
+                                <span className="inline-flex items-center rounded-full bg-blue-100 text-blue-700 px-1.5 py-0.5 text-xs">{log.newValue}</span>
+                              </span>
+                            )}
+                            {log.field && log.field !== "status" && log.oldValue && log.newValue && (
+                              <span className="text-xs text-muted-foreground">
+                                {log.oldValue} → {log.newValue}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                            {log.user && <span>by {log.user.name}</span>}
+                            <span>{formatDateTime(log.createdAt)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </CardContent>
           </Card>
