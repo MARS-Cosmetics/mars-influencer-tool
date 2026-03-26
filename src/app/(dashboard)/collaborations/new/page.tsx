@@ -592,7 +592,7 @@ export default function NewCollaborationPage() {
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label>Influencer <span className="text-red-500">*</span></Label>
+              <div className="flex items-center gap-1 text-sm font-medium">Influencer <span className="text-red-500">*</span></div>
               <SearchableSelect
                 options={influencerOptions}
                 value={form.influencerId}
@@ -722,7 +722,7 @@ export default function NewCollaborationPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>Brand <span className="text-red-500">*</span></Label>
+              <div className="flex items-center gap-1 text-sm font-medium">Brand <span className="text-red-500">*</span></div>
               <SearchableSelect
                 options={brandOptions}
                 value={form.brandId}
@@ -745,7 +745,7 @@ export default function NewCollaborationPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>Assigned To <span className="text-red-500">*</span></Label>
+              <div className="flex items-center gap-1 text-sm font-medium">Assigned To <span className="text-red-500">*</span></div>
               <SearchableSelect
                 options={userOptions}
                 value={form.assignedTo}
@@ -765,7 +765,7 @@ export default function NewCollaborationPage() {
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="type">Collaboration Type <span className="text-red-500">*</span></Label>
+              <div className="flex items-center gap-1 text-sm font-medium">Collaboration Type <span className="text-red-500">*</span></div>
               <select
                 id="type"
                 name="type"
@@ -1066,7 +1066,7 @@ export default function NewCollaborationPage() {
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="agreedAmount">Agreed Amount {form.type === "paid" && <span className="text-red-500">*</span>}</Label>
+              <div className="flex items-center gap-1 text-sm font-medium">Agreed Amount {form.type === "paid" && <span className="text-red-500">*</span>}</div>
               <Input
                 id="agreedAmount"
                 name="agreedAmount"
