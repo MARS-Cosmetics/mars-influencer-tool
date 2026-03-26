@@ -36,7 +36,7 @@ async function main() {
 
   const admin = await prisma.user.create({
     data: {
-      email: "admin@mars.com",
+      email: "admin@marscosmetics.in",
       name: "Admin User",
       password: adminPassword,
       role: "admin",
@@ -46,7 +46,7 @@ async function main() {
 
   const manager = await prisma.user.create({
     data: {
-      email: "manager@mars.com",
+      email: "manager@marscosmetics.in",
       name: "Marketing Manager",
       password: userPassword,
       role: "manager",
@@ -56,7 +56,7 @@ async function main() {
 
   const user1 = await prisma.user.create({
     data: {
-      email: "priya@mars.com",
+      email: "priya@marscosmetics.in",
       name: "Priya Sharma",
       password: userPassword,
       role: "user",
@@ -66,7 +66,7 @@ async function main() {
 
   const user2 = await prisma.user.create({
     data: {
-      email: "rahul@mars.com",
+      email: "rahul@marscosmetics.in",
       name: "Rahul Verma",
       password: userPassword,
       role: "user",
@@ -605,10 +605,10 @@ async function main() {
   console.log("Created contracts");
 
   console.log("\nSeed complete! Login credentials:");
-  console.log("  Admin:   admin@mars.com / admin123");
-  console.log("  Manager: manager@mars.com / user123");
-  console.log("  User 1:  priya@mars.com / user123");
-  console.log("  User 2:  rahul@mars.com / user123");
+  console.log("  Admin:   admin@marscosmetics.in / admin123");
+  console.log("  Manager: manager@marscosmetics.in / user123");
+  console.log("  User 1:  priya@marscosmetics.in / user123");
+  console.log("  User 2:  rahul@marscosmetics.in / user123");
 }
 
 main()

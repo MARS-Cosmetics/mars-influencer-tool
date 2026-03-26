@@ -16,8 +16,29 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
+        const email = (credentials.email as string).toLowerCase().trim();
+
+        // Validate email domain against allowed domains
+        const domain = email.split("@")[1];
+        if (!domain) return null;
+
+        const allowedDomains = await prisma.allowedDomain.findMany({
+          where: { isActive: true },
+          select: { domain: true },
+        });
+
+        // If there are allowed domains configured, enforce them
+        if (allowedDomains.length > 0) {
+          const isAllowed = allowedDomains.some(
+            (d) => d.domain.toLowerCase() === domain.toLowerCase()
+          );
+          if (!isAllowed) {
+            throw new Error(`Email domain @${domain} is not permitted. Contact your administrator.`);
+          }
+        }
+
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email as string },
+          where: { email },
         });
 
         if (!user || !user.isActive) return null;

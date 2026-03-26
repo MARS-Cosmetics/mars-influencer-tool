@@ -220,6 +220,20 @@ enum ContentTheme {
 }
 
 // ============================================================
+// 0. ALLOWED_DOMAINS — Email domains permitted to log in
+// ============================================================
+
+model AllowedDomain {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  domain    String   @unique // e.g., "marscosmetics.in"
+  isActive  Boolean  @default(true) @map("is_active")
+  addedBy   String?  @map("added_by")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  @@map("allowed_domains")
+}
+
+// ============================================================
 // 1. USERS — Internal team members
 // ============================================================
 

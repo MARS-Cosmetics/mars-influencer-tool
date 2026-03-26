@@ -39,7 +39,9 @@ export default function LoginPage() {
     <div className="flex min-h-screen">
       {/* Left panel - MARS brand */}
       <div className="hidden w-1/2 flex-col justify-between bg-[#A6192E] p-12 lg:flex">
-        <MarsLogo variant="white" className="h-8" />
+        <div>
+          <MarsLogo variant="white" className="h-8" />
+        </div>
         <div>
           <h2
             className="text-4xl font-bold leading-tight text-white"

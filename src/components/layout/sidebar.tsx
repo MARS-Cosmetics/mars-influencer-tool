@@ -21,6 +21,7 @@ import {
   ShoppingBag,
   Flame,
   Settings,
+  Globe,
 } from "lucide-react";
 
 const navSections = [
@@ -55,6 +56,12 @@ const navSections = [
       { label: "Invoices", href: "/invoices", icon: FileText },
       { label: "Contracts", href: "/contracts", icon: FileSignature },
       { label: "Payment Terms", href: "/payment-terms", icon: Receipt },
+    ],
+  },
+  {
+    label: "Settings",
+    items: [
+      { label: "Allowed Domains", href: "/settings/domains", icon: Globe },
     ],
   },
 ];

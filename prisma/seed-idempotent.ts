@@ -26,6 +26,20 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL! });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
+async function seedAllowedDomains() {
+  console.log("  → Seeding allowed domains...");
+  const domains = ["marscosmetics.in"];
+
+  for (const domain of domains) {
+    await prisma.allowedDomain.upsert({
+      where: { domain },
+      update: { isActive: true },
+      create: { domain, isActive: true, addedBy: "system" },
+    });
+  }
+  console.log(`    ✓ ${domains.length} domains`);
+}
+
 async function seedBrands() {
   console.log("  → Seeding brands...");
   const brands = [
@@ -52,10 +66,10 @@ async function seedUsers(brandIds: { cosmetics: string; skincare: string }) {
   const userHash = await hash("user123", 12);
 
   const users = [
-    { email: "admin@mars.com", name: "Admin User", password: passwordHash, role: "admin" as const, brandId: brandIds.cosmetics },
-    { email: "manager@mars.com", name: "Marketing Manager", password: userHash, role: "manager" as const, brandId: brandIds.cosmetics },
-    { email: "priya@mars.com", name: "Priya Sharma", password: userHash, role: "user" as const, brandId: brandIds.cosmetics },
-    { email: "rahul@mars.com", name: "Rahul Verma", password: userHash, role: "user" as const, brandId: brandIds.skincare },
+    { email: "admin@marscosmetics.in", name: "Admin User", password: passwordHash, role: "admin" as const, brandId: brandIds.cosmetics },
+    { email: "manager@marscosmetics.in", name: "Marketing Manager", password: userHash, role: "manager" as const, brandId: brandIds.cosmetics },
+    { email: "priya@marscosmetics.in", name: "Priya Sharma", password: userHash, role: "user" as const, brandId: brandIds.cosmetics },
+    { email: "rahul@marscosmetics.in", name: "Rahul Verma", password: userHash, role: "user" as const, brandId: brandIds.skincare },
   ];
 
   const created = [];
@@ -279,13 +293,16 @@ async function seedTestInfluencers(adminId: string, userId: string) {
 async function main() {
   console.log(`\n🌱 Seeding MARS IMS [${APP_ENV.toUpperCase()}]\n`);
 
+  // 0. Allowed domains
+  await seedAllowedDomains();
+
   // 1. Core data (all environments)
   const [cosmeticsBrand, skincareBrand] = await seedBrands();
   const brandIds = { cosmetics: cosmeticsBrand.id, skincare: skincareBrand.id };
 
   const users = await seedUsers(brandIds);
   const admin = users.find((u) => u.role === "admin")!;
-  const user1 = users.find((u) => u.email === "priya@mars.com")!;
+  const user1 = users.find((u) => u.email === "priya@marscosmetics.in")!;
 
   await seedProducts(brandIds);
   await seedPaymentTerms();
@@ -295,10 +312,10 @@ async function main() {
 
   console.log(`\n✅ Seed complete!\n`);
   console.log("Login credentials:");
-  console.log("  Admin:   admin@mars.com / admin123");
-  console.log("  Manager: manager@mars.com / user123");
-  console.log("  User 1:  priya@mars.com / user123");
-  console.log("  User 2:  rahul@mars.com / user123\n");
+  console.log("  Admin:   admin@marscosmetics.in / admin123");
+  console.log("  Manager: manager@marscosmetics.in / user123");
+  console.log("  User 1:  priya@marscosmetics.in / user123");
+  console.log("  User 2:  rahul@marscosmetics.in / user123\n");
 }
 
 main()
