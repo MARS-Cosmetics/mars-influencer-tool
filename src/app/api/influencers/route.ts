@@ -130,11 +130,19 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Clean empty strings for UUID fields (Postgres rejects "" as invalid UUID)
-    const uuidFields = ["agencyId", "brandId", "managerId"];
-    for (const field of uuidFields) {
-      if (body[field] === "" || body[field] === undefined) {
-        body[field] = null;
+    // Convert FK fields to Prisma relation syntax for create
+    const relationMap: Record<string, string> = {
+      agencyId: "agency",
+      brandId: "brand",
+      managerId: "creator",
+    };
+    for (const [fkField, relationName] of Object.entries(relationMap)) {
+      if (fkField in body) {
+        const val = body[fkField];
+        delete body[fkField];
+        if (val && val !== "") {
+          body[relationName] = { connect: { id: val } };
+        }
       }
     }
 
