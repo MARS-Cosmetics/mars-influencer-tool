@@ -1051,9 +1051,10 @@ export default function NewCollaborationPage() {
                 name="agreedAmount"
                 type="number"
                 step="0.01"
-                value={form.agreedAmount}
+                value={form.type === "barter" ? "" : form.agreedAmount}
                 onChange={handleChange}
-                placeholder="e.g. 50000"
+                placeholder={form.type === "barter" ? "N/A (Barter)" : "e.g. 50000"}
+                disabled={form.type === "barter"}
               />
             </div>
 
