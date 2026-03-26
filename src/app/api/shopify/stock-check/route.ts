@@ -26,8 +26,14 @@ export async function GET(request: NextRequest) {
     });
 
     const stockResults = products.map((product) => {
-      const quantity = product.inventoryQuantity ?? 0;
-      const inStock = quantity > 0;
+      const hasInventoryData = product.inventoryQuantity !== null;
+      const quantity = product.inventoryQuantity ?? null;
+
+      // inStock logic:
+      // - No inventory data (null) → assume available (not synced yet)
+      // - Has data and quantity > 0 → in stock
+      // - Has data and quantity = 0 → out of stock (but only a warning, not a blocker)
+      const inStock = !hasInventoryData || (quantity !== null && quantity > 0);
 
       return {
         productId: product.id,
@@ -37,6 +43,7 @@ export async function GET(request: NextRequest) {
         isActive: product.isActive,
         inStock,
         quantity,
+        hasInventoryData,
         discontinued: !product.isActive,
       };
     });

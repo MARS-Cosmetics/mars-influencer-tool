@@ -515,8 +515,8 @@ export default function NewCollaborationPage() {
     }
 
     if (hasOutOfStock) {
-      toast.error("Please remove out-of-stock products before submitting");
-      return;
+      // OOS is a warning, not a blocker — user can proceed
+      toast.warning("Some products are marked as out of stock. The collaboration will still be created.");
     }
 
     setIsSubmitting(true);
@@ -574,7 +574,7 @@ export default function NewCollaborationPage() {
     }
   }
 
-  const submitDisabled = isSubmitting || addressCheck === "no_address" || hasOutOfStock;
+  const submitDisabled = isSubmitting || addressCheck === "no_address";
 
   const getProductName = (productId: string) => {
     const opt = productOptions.find((o) => o.value === productId);
