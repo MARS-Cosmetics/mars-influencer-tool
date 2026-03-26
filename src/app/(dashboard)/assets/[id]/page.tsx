@@ -18,6 +18,7 @@ import {
   Link as LinkIcon,
 } from "lucide-react";
 import { ContentRating } from "@/components/content-rating";
+import { ContentReview } from "@/components/content-review";
 
 function formatNumber(value: number | null | undefined): string {
   if (value === null || value === undefined) return "-";
@@ -96,6 +97,12 @@ export default async function AssetDetailPage(props: {
   if (!asset) {
     notFound();
   }
+
+  const revisions = await prisma.assetRevision.findMany({
+    where: { assetId: asset.id },
+    include: { reviewer: { select: { id: true, name: true } } },
+    orderBy: { version: "desc" },
+  });
 
   // CPV Calculation
   const isBarter = asset.collaboration?.type === "barter" || asset.collaboration?.type === "pr_gifting";
@@ -394,6 +401,23 @@ export default async function AssetDetailPage(props: {
             />
           </CardContent>
         </Card>
+
+        {/* Content Review Section */}
+        <ContentReview
+          assetId={asset.id}
+          currentVersion={asset.version ?? 1}
+          currentContentUrl={asset.contentUrl ?? undefined}
+          revisions={revisions.map((r) => ({
+            id: r.id,
+            version: r.version,
+            contentUrl: r.contentUrl,
+            status: r.status,
+            feedback: r.feedback,
+            reviewedAt: r.reviewedAt?.toISOString() ?? null,
+            createdAt: r.createdAt.toISOString(),
+            reviewer: r.reviewer,
+          }))}
+        />
       </div>
     </div>
   );

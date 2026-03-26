@@ -255,6 +255,8 @@ model User {
   createdContracts     Contract[]      @relation("CreatedContracts")
   createdContentIdeas  ContentIdea[]   @relation("CreatedContentIdeas")
   activityLogs         ActivityLog[]
+  statusTransitions    StatusTransition[]
+  assetReviews         AssetRevision[]
 
   @@map("users")
 }
@@ -542,6 +544,7 @@ model Collaboration {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
   createdBy String?  @map("created_by") @db.Uuid
+  requiresContentApproval Boolean @default(true) @map("requires_content_approval")
 
   // Relations
   influencer  Influencer             @relation(fields: [influencerId], references: [id])
@@ -559,6 +562,7 @@ model Collaboration {
   prParcels   PrParcel[]
   contracts    Contract[]
   contentIdeas ContentIdea[]
+  statusTransitions StatusTransition[]
 
   @@index([assignedTo])
   @@index([influencerId])
@@ -736,12 +740,75 @@ model Asset {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 
+  version Int @default(1)
+
   // Relations
   collaboration Collaboration @relation(fields: [collaborationId], references: [id])
   influencer    Influencer    @relation(fields: [influencerId], references: [id])
+  revisions     AssetRevision[]
 
   @@index([isViral])
   @@map("assets")
+}
+
+// ============================================================
+// ASSET REVISIONS — Content iteration tracking
+// ============================================================
+
+model AssetRevision {
+  id        String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  assetId   String @map("asset_id") @db.Uuid
+  version   Int
+
+  // Content reference (external URL - no file storage)
+  contentUrl  String  @map("content_url")  // Google Drive / Dropbox link
+
+  // Review
+  status     String  @default("submitted") // submitted, approved, revision_requested, rejected
+  feedback   String? // Reviewer's notes
+  reviewedBy String? @map("reviewed_by") @db.Uuid
+
+  // Timestamps
+  submittedAt DateTime @default(now()) @map("submitted_at") @db.Timestamptz()
+  reviewedAt  DateTime? @map("reviewed_at") @db.Timestamptz()
+
+  // Relations
+  asset    Asset @relation(fields: [assetId], references: [id])
+  reviewer User? @relation(fields: [reviewedBy], references: [id])
+
+  @@index([assetId])
+  @@map("asset_revisions")
+}
+
+// ============================================================
+// STATUS TRANSITIONS — Audit trail of all status changes
+// ============================================================
+
+model StatusTransition {
+  id              String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collaborationId String @map("collaboration_id") @db.Uuid
+
+  fromStatus String @map("from_status")
+  toStatus   String @map("to_status")
+
+  // Who made the change
+  changedBy String? @map("changed_by") @db.Uuid
+
+  // Auto-actions that were executed
+  autoActionsExecuted Json? @map("auto_actions_executed") // ["create_shopify_order", "create_payment_entries"]
+  autoActionErrors    Json? @map("auto_action_errors")    // any errors from auto-actions
+
+  // Context at time of transition
+  notes String?
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  // Relations
+  collaboration Collaboration @relation(fields: [collaborationId], references: [id])
+  changedByUser User?         @relation(fields: [changedBy], references: [id])
+
+  @@index([collaborationId])
+  @@map("status_transitions")
 }
 
 // ============================================================

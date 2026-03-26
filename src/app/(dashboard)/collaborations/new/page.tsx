@@ -139,6 +139,8 @@ export default function NewCollaborationPage() {
   const [pendingProductId, setPendingProductId] = useState("");
   const [pendingProductQty, setPendingProductQty] = useState(1);
 
+  const [requiresContentApproval, setRequiresContentApproval] = useState(true);
+
   const [form, setForm] = useState({
     influencerId: "",
     brandId: "",
@@ -466,7 +468,12 @@ export default function NewCollaborationPage() {
   function handleChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) {
-    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+    // Auto-toggle content approval based on type
+    if (name === "type") {
+      setRequiresContentApproval(value === "paid");
+    }
   }
 
   function setField(name: string, value: string) {
@@ -527,6 +534,7 @@ export default function NewCollaborationPage() {
 
       const payload: Record<string, unknown> = {
         ...form,
+        requiresContentApproval,
         deliverables: deliverablesJson,
         products: products.map((p) => ({
           productId: p.productId,
@@ -799,6 +807,19 @@ export default function NewCollaborationPage() {
                 <option value="completed">Completed</option>
                 <option value="cancelled">Cancelled</option>
               </select>
+            </div>
+
+            <div className="flex items-center gap-2 md:col-span-2 pt-2">
+              <input
+                type="checkbox"
+                id="requiresContentApproval"
+                checked={requiresContentApproval}
+                onChange={(e) => setRequiresContentApproval(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+              />
+              <Label htmlFor="requiresContentApproval" className="cursor-pointer text-sm">
+                Requires Content Approval
+              </Label>
             </div>
           </CardContent>
         </Card>

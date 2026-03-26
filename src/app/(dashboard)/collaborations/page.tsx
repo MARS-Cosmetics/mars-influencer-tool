@@ -15,7 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Search, Handshake } from "lucide-react";
+import { Plus, Search, Handshake, ExternalLink, Truck } from "lucide-react";
 import { InlineStatusSelect } from "./inline-status-select";
 
 function formatCurrency(amount: unknown): string {
@@ -98,7 +98,13 @@ export default async function CollaborationsPage(props: {
     where,
     orderBy: { createdAt: "desc" },
     take: 50,
-    include: {
+    select: {
+      id: true,
+      status: true,
+      type: true,
+      agreedAmount: true,
+      dueDate: true,
+      requiresContentApproval: true,
       influencer: {
         select: { id: true, name: true, instagramHandle: true },
       },
@@ -108,6 +114,12 @@ export default async function CollaborationsPage(props: {
       assignee: {
         select: { id: true, name: true },
       },
+      shopifyOrderId: true,
+      shopifyOrderNumber: true,
+      shopifyOrderStatus: true,
+      shopifyTrackingId: true,
+      shopifyTrackingUrl: true,
+      shopifyFulfillmentStatus: true,
       assets: {
         select: { views: true },
       },
@@ -204,6 +216,8 @@ export default async function CollaborationsPage(props: {
                 <TableHead>Status</TableHead>
                 <TableHead>Agreed Amount</TableHead>
                 <TableHead>CPV</TableHead>
+                <TableHead>Shopify Order</TableHead>
+                <TableHead>Tracking</TableHead>
                 <TableHead>Assigned To</TableHead>
                 <TableHead>Content Due</TableHead>
               </TableRow>
@@ -211,7 +225,7 @@ export default async function CollaborationsPage(props: {
             <TableBody>
               {collaborations.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                  <TableCell colSpan={10} className="text-center py-8 text-gray-500">
                     No collaborations found.
                   </TableCell>
                 </TableRow>
@@ -250,6 +264,8 @@ export default async function CollaborationsPage(props: {
                       <InlineStatusSelect
                         collaborationId={collab.id}
                         currentStatus={collab.status}
+                        requiresContentApproval={collab.requiresContentApproval ?? true}
+                        collaborationType={collab.type}
                       />
                     </TableCell>
                     <TableCell>{formatCurrency(collab.agreedAmount as unknown as number)}</TableCell>
@@ -263,6 +279,35 @@ export default async function CollaborationsPage(props: {
                         const cpv = Number(collab.agreedAmount) / totalViews;
                         return `₹${cpv < 1 ? cpv.toFixed(3) : cpv.toFixed(2)}`;
                       })()}
+                    </TableCell>
+                    <TableCell>
+                      {collab.shopifyOrderNumber ? (
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs font-medium">{collab.shopifyOrderNumber}</span>
+                          <span className={`text-xs ${collab.shopifyFulfillmentStatus === "fulfilled" ? "text-green-600" : collab.shopifyOrderStatus === "cancelled" ? "text-red-500" : "text-gray-500"}`}>
+                            {collab.shopifyFulfillmentStatus || collab.shopifyOrderStatus || "unfulfilled"}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 text-xs">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {collab.shopifyTrackingUrl ? (
+                        <a
+                          href={collab.shopifyTrackingUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                        >
+                          <Truck className="h-3 w-3" />
+                          {collab.shopifyTrackingId || "Track"}
+                        </a>
+                      ) : collab.shopifyTrackingId ? (
+                        <span className="text-xs text-gray-600">{collab.shopifyTrackingId}</span>
+                      ) : (
+                        <span className="text-gray-400 text-xs">—</span>
+                      )}
                     </TableCell>
                     <TableCell>{collab.assignee.name}</TableCell>
                     <TableCell>{formatDate(collab.dueDate)}</TableCell>
