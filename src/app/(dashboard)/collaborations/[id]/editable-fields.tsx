@@ -50,6 +50,17 @@ export function EditableField({
   const displayValue = formatForDisplay(currentValue, displayFormat, placeholder);
 
   async function handleSave() {
+    // Validate date is in the future
+    if (type === "date" && editValue) {
+      const selected = new Date(editValue);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (selected < today) {
+        toast.error("Date must be today or later");
+        return;
+      }
+    }
+
     setIsSaving(true);
     try {
       const payload: Record<string, unknown> = {};
@@ -111,6 +122,7 @@ export function EditableField({
             value={editValue}
             onChange={(e) => setEditValue(e.target.value)}
             step={type === "number" ? "0.01" : undefined}
+            min={type === "date" ? new Date().toISOString().split("T")[0] : undefined}
             className="flex h-8 w-full rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50"
             autoFocus
             onKeyDown={(e) => {
