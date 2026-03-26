@@ -42,7 +42,7 @@ describe('Product Model Schema Constraints (regression)', () => {
     productBlock = extractModelBlock('Product');
   });
 
-  it('should NOT have a @unique constraint on sku', () => {
+  it('should have a @unique constraint on sku (required for idempotent seeding)', () => {
     // Find the sku line
     const skuLine = productBlock.split('\n').find((line) => {
       const trimmed = line.trim();
@@ -50,7 +50,7 @@ describe('Product Model Schema Constraints (regression)', () => {
     });
 
     expect(skuLine).toBeDefined();
-    expect(skuLine).not.toContain('@unique');
+    expect(skuLine).toContain('@unique');
   });
 
   it('should NOT have a @@unique constraint that includes sku', () => {

@@ -64,9 +64,18 @@ export function Sidebar() {
 
   return (
     <aside className="flex h-screen w-[260px] flex-col bg-black text-white">
-      {/* Logo */}
-      <div className="flex h-16 items-center gap-3 border-b border-white/10 px-6">
+      {/* Logo + Environment Badge */}
+      <div className="flex h-16 items-center justify-between border-b border-white/10 px-6">
         <MarsLogo variant="white" className="h-7" />
+        {process.env.NEXT_PUBLIC_APP_ENV !== "production" && (
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+            process.env.NEXT_PUBLIC_APP_ENV === "uat"
+              ? "bg-yellow-500/20 text-yellow-400"
+              : "bg-green-500/20 text-green-400"
+          }`}>
+            {process.env.NEXT_PUBLIC_APP_ENV || "DEV"}
+          </span>
+        )}
       </div>
 
       {/* Navigation */}

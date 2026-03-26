@@ -581,7 +581,7 @@ model Product {
   id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   brandId          String   @map("brand_id") @db.Uuid
   name             String
-  sku              String?
+  sku              String?  @unique
   description      String?
   mrp              Decimal? @db.Decimal(10, 2)
   imageUrl         String?  @map("image_url")
