@@ -33,6 +33,7 @@ interface ContentRatingProps {
   assetId: string;
   currentRating?: number;
   currentTags?: string[];
+  contentUrl?: string | null; // Must have a live URL before rating is allowed
   onRated?: () => void;
 }
 
@@ -40,8 +41,10 @@ export function ContentRating({
   assetId,
   currentRating,
   currentTags = [],
+  contentUrl,
   onRated,
 }: ContentRatingProps) {
+  const canRate = !!contentUrl;
   const [rating, setRating] = useState<number>(currentRating || 0);
   const [hoveredStar, setHoveredStar] = useState<number>(0);
   const [selectedTags, setSelectedTags] = useState<string[]>(currentTags);
@@ -86,6 +89,18 @@ export function ContentRating({
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (!canRate) {
+    return (
+      <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4">
+        <p className="text-sm text-yellow-800 font-medium">Rating not available</p>
+        <p className="text-xs text-yellow-700 mt-1">
+          A live content URL must be attached to this asset before it can be rated.
+          Please add the published content link first.
+        </p>
+      </div>
+    );
   }
 
   return (

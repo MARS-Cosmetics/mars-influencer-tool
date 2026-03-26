@@ -44,6 +44,14 @@ export async function POST(
       );
     }
 
+    // Content URL must be attached before rating
+    if (!existing.contentUrl) {
+      return NextResponse.json(
+        { error: "A live content URL must be attached to this asset before it can be rated" },
+        { status: 400 }
+      );
+    }
+
     const updatedAsset = await prisma.asset.update({
       where: { id },
       data: {

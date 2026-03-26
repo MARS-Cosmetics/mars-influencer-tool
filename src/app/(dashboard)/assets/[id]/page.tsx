@@ -392,6 +392,7 @@ export default async function AssetDetailPage(props: {
             )}
             <ContentRating
               assetId={asset.id}
+              contentUrl={asset.contentUrl}
               currentRating={
                 asset.contentRating != null
                   ? Number(asset.contentRating)

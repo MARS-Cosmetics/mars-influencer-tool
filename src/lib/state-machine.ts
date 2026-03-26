@@ -160,6 +160,9 @@ export interface CollaborationContext {
   hasDueDate: boolean;
   hasShopifyOrder: boolean;
   assetCount: number;
+  assetsCompleted: number; // how many assets have status "completed"
+  assetsWithUrl: number; // how many assets have a contentUrl
+  assetsWithRating: number; // how many assets have a rating
   requiresContentApproval: boolean;
   type: string; // barter, paid, etc.
 }
@@ -200,6 +203,20 @@ export function validateTransition(
   if (toStatus === "content_submitted") {
     if (context.assetCount === 0) {
       errors.push("At least one asset/deliverable must be linked");
+    }
+    // All assets must have a content URL before submitting
+    if (context.assetCount > 0 && context.assetsWithUrl < context.assetCount) {
+      errors.push(`All assets must have a live content URL attached (${context.assetsWithUrl}/${context.assetCount} have URLs)`);
+    }
+  }
+
+  if (toStatus === "completed") {
+    // All assets must be completed (which requires URL + rating)
+    if (context.assetCount > 0 && context.assetsCompleted < context.assetCount) {
+      errors.push(`All assets must be completed before marking collaboration as completed (${context.assetsCompleted}/${context.assetCount} completed)`);
+    }
+    if (context.assetCount > 0 && context.assetsWithRating < context.assetCount) {
+      errors.push(`All assets must be rated before completing (${context.assetsWithRating}/${context.assetCount} rated)`);
     }
   }
 
