@@ -118,12 +118,18 @@ export function EditableField({
           />
         ) : (
           <input
+            ref={(el) => {
+              if (el && type === "date") {
+                // Auto-open the date picker calendar
+                try { el.showPicker(); } catch {}
+              }
+            }}
             type={type}
             value={editValue}
             onChange={(e) => setEditValue(e.target.value)}
             step={type === "number" ? "0.01" : undefined}
             min={type === "date" ? new Date().toISOString().split("T")[0] : undefined}
-            className="flex h-8 w-full rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50"
+            className={`flex h-8 w-full rounded-md border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 ${type === "date" ? "cursor-pointer" : ""}`}
             autoFocus
             onKeyDown={(e) => {
               if (e.key === "Enter") handleSave();
