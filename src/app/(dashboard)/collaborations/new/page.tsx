@@ -901,7 +901,7 @@ export default function NewCollaborationPage() {
               Products
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4 overflow-visible">
+          <CardContent className="space-y-4">
             {/* Add product row */}
             <div className="flex gap-3 items-end">
               <div className="flex-1 space-y-1">
