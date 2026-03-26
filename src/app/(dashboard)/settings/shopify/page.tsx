@@ -190,9 +190,9 @@ export default function ShopifySyncPage() {
       </div>
 
       {/* Sync Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-3 items-stretch">
         {/* Product Sync Card */}
-        <Card>
+        <Card className="flex flex-col">
           <CardHeader>
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#A6192E]/10">
@@ -206,7 +206,7 @@ export default function ShopifySyncPage() {
               Syncs products, variants, images, and inventory levels from Shopify
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 flex-1 flex flex-col">
             <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
               Weekly (automated)
             </span>
@@ -223,7 +223,7 @@ export default function ShopifySyncPage() {
               )}
             </div>
             <Button
-              className="w-full"
+              className="w-full mt-auto"
               onClick={() => handleSync("products")}
               disabled={syncing.products}
             >
@@ -243,7 +243,7 @@ export default function ShopifySyncPage() {
         </Card>
 
         {/* Order Tracking Card */}
-        <Card>
+        <Card className="flex flex-col">
           <CardHeader>
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#A6192E]/10">
@@ -257,7 +257,7 @@ export default function ShopifySyncPage() {
               Updates fulfillment status and tracking info for Shopify orders
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 flex-1 flex flex-col">
             <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
               Daily (automated)
             </span>
@@ -274,7 +274,7 @@ export default function ShopifySyncPage() {
               )}
             </div>
             <Button
-              className="w-full"
+              className="w-full mt-auto"
               onClick={() => handleSync("orders")}
               disabled={syncing.orders}
             >
@@ -294,7 +294,7 @@ export default function ShopifySyncPage() {
         </Card>
 
         {/* Inventory Levels Card */}
-        <Card>
+        <Card className="flex flex-col">
           <CardHeader>
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#A6192E]/10">
@@ -308,7 +308,7 @@ export default function ShopifySyncPage() {
               Updates stock quantities for all products
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 flex-1 flex flex-col">
             <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
               Daily (with tracking)
             </span>
@@ -318,9 +318,12 @@ export default function ShopifySyncPage() {
                 Last synced:{" "}
                 {formatDate(syncStatus?.inventory?.lastSynced ?? null)}
               </div>
+              <p className="text-muted-foreground">
+                Syncs stock levels for all Shopify products
+              </p>
             </div>
             <Button
-              className="w-full"
+              className="w-full mt-auto"
               onClick={() => handleSync("inventory")}
               disabled={syncing.inventory}
             >
