@@ -16,9 +16,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { EditableField } from "./editable-fields";
+import { InlineStatusSelect } from "../inline-status-select";
 import {
   ArrowLeft,
-  Edit,
   Trash2,
   Package,
   Image,
@@ -215,12 +216,6 @@ export default async function CollaborationDetailPage(props: {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Link href={`/collaborations/${collaboration.id}/edit`}>
-            <Button variant="outline" size="sm">
-              <Edit className="mr-2 h-4 w-4" />
-              Edit
-            </Button>
-          </Link>
           <DeleteButton collaborationId={collaboration.id} />
         </div>
       </div>
@@ -281,33 +276,49 @@ export default async function CollaborationDetailPage(props: {
                     {typeLabels[collaboration.type]}
                   </span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-500">Status</span>
-                  <span
-                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[collaboration.status]}`}
-                  >
-                    {statusLabels[collaboration.status]}
-                  </span>
+                  <InlineStatusSelect
+                    collaborationId={collaboration.id}
+                    currentStatus={collaboration.status}
+                  />
                 </div>
                 <Separator />
-                <div className="flex justify-between">
+                <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-500">Agreed Amount</span>
-                  <span className="text-sm font-medium">
-                    {formatCurrency(collaboration.agreedAmount as unknown as number, collaboration.currency)}
-                  </span>
+                  <EditableField
+                    collaborationId={collaboration.id}
+                    field="agreedAmount"
+                    value={collaboration.agreedAmount as unknown as number}
+                    type="number"
+                    label="Agreed Amount"
+                    formatDisplay={(val) => {
+                      if (val === null || val === undefined) return "-";
+                      const num = typeof val === "string" ? parseFloat(val) : Number(val);
+                      if (isNaN(num)) return "-";
+                      return `₹${num.toLocaleString("en-IN")}`;
+                    }}
+                  />
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-500">Currency</span>
                   <span className="text-sm">{collaboration.currency || "INR"}</span>
                 </div>
                 <Separator />
-                <div className="flex justify-between">
+                <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-500">Started</span>
                   <span className="text-sm">{formatDate(collaboration.createdAt)}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-500">Due Date</span>
-                  <span className="text-sm">{formatDate(collaboration.dueDate)}</span>
+                  <EditableField
+                    collaborationId={collaboration.id}
+                    field="dueDate"
+                    value={collaboration.dueDate ? new Date(collaboration.dueDate).toISOString().split("T")[0] : null}
+                    type="date"
+                    label="Due Date"
+                    formatDisplay={(val) => val ? formatDate(new Date(String(val))) : "Not set"}
+                  />
                 </div>
                 {collaboration.contentRating && (
                   <>
@@ -440,13 +451,14 @@ export default async function CollaborationDetailPage(props: {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {collaboration.brief ? (
-                  <p className="text-sm text-gray-600 whitespace-pre-wrap">
-                    {collaboration.brief}
-                  </p>
-                ) : (
-                  <p className="text-sm text-gray-400">No brief provided</p>
-                )}
+                <EditableField
+                  collaborationId={collaboration.id}
+                  field="brief"
+                  value={collaboration.brief}
+                  type="textarea"
+                  label="Brief"
+                  formatDisplay={(val) => val ? String(val) : "Click to add brief..."}
+                />
               </CardContent>
             </Card>
 
