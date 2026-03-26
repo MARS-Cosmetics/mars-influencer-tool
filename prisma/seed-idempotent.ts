@@ -62,8 +62,8 @@ async function seedBrands() {
 
 async function seedUsers(brandIds: { cosmetics: string; skincare: string }) {
   console.log("  → Seeding users...");
-  const passwordHash = await hash("admin123", 12);
-  const userHash = await hash("user123", 12);
+  const passwordHash = await hash("admin123", 10);
+  const userHash = await hash("user123", 10);
 
   const users = [
     { email: "admin@marscosmetics.in", name: "Admin User", password: passwordHash, role: "admin" as const, brandId: brandIds.cosmetics, mustChangePassword: true },

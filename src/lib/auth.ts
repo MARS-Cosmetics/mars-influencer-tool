@@ -4,6 +4,26 @@ import { compare } from "bcryptjs";
 import { prisma } from "@/lib/db";
 import { authConfig } from "@/lib/auth.config";
 
+// Cache allowed domains for 5 minutes to avoid hitting DB on every login
+let cachedDomains: { domains: string[]; cachedAt: number } | null = null;
+const DOMAIN_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+async function getAllowedDomains(): Promise<string[]> {
+  const now = Date.now();
+  if (cachedDomains && now - cachedDomains.cachedAt < DOMAIN_CACHE_TTL) {
+    return cachedDomains.domains;
+  }
+
+  const results = await prisma.allowedDomain.findMany({
+    where: { isActive: true },
+    select: { domain: true },
+  });
+
+  const domains = results.map((d) => d.domain.toLowerCase());
+  cachedDomains = { domains, cachedAt: now };
+  return domains;
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
   providers: [
@@ -17,29 +37,35 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!credentials?.email || !credentials?.password) return null;
 
         const email = (credentials.email as string).toLowerCase().trim();
-
-        // Validate email domain against allowed domains
         const domain = email.split("@")[1];
         if (!domain) return null;
 
-        const allowedDomains = await prisma.allowedDomain.findMany({
-          where: { isActive: true },
-          select: { domain: true },
-        });
+        // Run domain check and user lookup in parallel
+        const [allowedDomains, user] = await Promise.all([
+          getAllowedDomains(),
+          prisma.user.findUnique({
+            where: { email },
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              password: true,
+              role: true,
+              brandId: true,
+              isActive: true,
+              mustChangePassword: true,
+            },
+          }),
+        ]);
 
-        // If there are allowed domains configured, enforce them
+        // Check domain
         if (allowedDomains.length > 0) {
-          const isAllowed = allowedDomains.some(
-            (d) => d.domain.toLowerCase() === domain.toLowerCase()
-          );
-          if (!isAllowed) {
-            throw new Error(`Email domain @${domain} is not permitted. Contact your administrator.`);
+          if (!allowedDomains.includes(domain.toLowerCase())) {
+            throw new Error(
+              `Email domain @${domain} is not permitted. Contact your administrator.`
+            );
           }
         }
-
-        const user = await prisma.user.findUnique({
-          where: { email },
-        });
 
         if (!user || !user.isActive) return null;
 

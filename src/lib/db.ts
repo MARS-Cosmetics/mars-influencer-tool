@@ -9,7 +9,12 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function createPrismaClient() {
-  const pool = new Pool({ connectionString });
+  const pool = new Pool({
+    connectionString,
+    max: 10, // max connections in pool
+    idleTimeoutMillis: 30000, // close idle connections after 30s
+    connectionTimeoutMillis: 5000, // fail fast if can't connect in 5s
+  });
   const adapter = new PrismaPg(pool);
   return new PrismaClient({ adapter });
 }
