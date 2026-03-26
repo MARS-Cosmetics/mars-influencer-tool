@@ -99,8 +99,13 @@ beforeEach(() => {
   // Default: brand exists
   prismaMock.brand.findFirst.mockResolvedValue({ id: 'brand-1', name: 'MARS Cosmetics' });
 
-  // Default: no existing product (new inserts)
-  (prismaMock.product as any).findFirst = vi.fn().mockResolvedValue(null);
+  // Default: upsert returns a new product (createdAt === updatedAt means new)
+  const now = new Date();
+  (prismaMock.product as any).upsert = vi.fn().mockResolvedValue({
+    id: 'prod-1',
+    createdAt: now,
+    updatedAt: now,
+  });
   prismaMock.product.create.mockResolvedValue({ id: 'prod-1' });
   prismaMock.product.update.mockResolvedValue({ id: 'prod-1' });
   (prismaMock.product as any).updateMany = vi.fn().mockResolvedValue({ count: 1 });
@@ -115,7 +120,7 @@ beforeEach(() => {
 
 describe('SKU Duplicate Handling (regression)', () => {
   it('should NOT throw unique constraint errors when syncing products with duplicate SKUs', async () => {
-    // Two different products sharing the same SKU
+    // Two different products sharing the same SKU — upsert by shopifyVariantId handles this
     const products = [
       makeShopifyProduct({ id: 1, variantId: 101, sku: 'DUPE-SKU' }),
       makeShopifyProduct({ id: 2, variantId: 102, sku: 'DUPE-SKU' }),
@@ -127,8 +132,8 @@ describe('SKU Duplicate Handling (regression)', () => {
     const body = await res.json();
 
     expect(body.success).toBe(true);
-    // Both products should be created (2 calls to create)
-    expect(prismaMock.product.create).toHaveBeenCalledTimes(2);
+    // Both products should be upserted (2 calls to upsert)
+    expect((prismaMock.product as any).upsert).toHaveBeenCalledTimes(2);
   });
 
   it('should handle null SKUs without errors', async () => {
@@ -143,13 +148,11 @@ describe('SKU Duplicate Handling (regression)', () => {
     const body = await res.json();
 
     expect(body.success).toBe(true);
-    expect(prismaMock.product.create).toHaveBeenCalledTimes(2);
+    expect((prismaMock.product as any).upsert).toHaveBeenCalledTimes(2);
 
-    // Verify the data passed to create has sku as undefined (null coalesced)
-    for (const call of prismaMock.product.create.mock.calls) {
-      const data = call[0].data;
-      // sku should be undefined (from `variant.sku ?? undefined`)
-      expect(data.sku).toBeUndefined();
+    // Verify the data passed has sku as null
+    for (const call of (prismaMock.product as any).upsert.mock.calls) {
+      expect(call[0].create.sku).toBeNull();
     }
   });
 
@@ -165,7 +168,7 @@ describe('SKU Duplicate Handling (regression)', () => {
     const body = await res.json();
 
     expect(body.success).toBe(true);
-    expect(prismaMock.product.create).toHaveBeenCalledTimes(2);
+    expect((prismaMock.product as any).upsert).toHaveBeenCalledTimes(2);
   });
 
   it('should create separate Product rows for each variant of the same product', async () => {
@@ -184,8 +187,8 @@ describe('SKU Duplicate Handling (regression)', () => {
     const body = await res.json();
 
     expect(body.success).toBe(true);
-    // 3 variants = 3 product rows created
-    expect(prismaMock.product.create).toHaveBeenCalledTimes(3);
+    // 3 variants = 3 upsert calls (one per variant)
+    expect((prismaMock.product as any).upsert).toHaveBeenCalledTimes(3);
   });
 });
 
@@ -194,26 +197,29 @@ describe('SKU Duplicate Handling (regression)', () => {
 // ============================================================
 
 describe('Variant-based Upsert (regression)', () => {
-  it('should match by shopifyVariantId, NOT shopifyProductId', async () => {
+  it('should upsert by shopifyVariantId (the unique Shopify identifier)', async () => {
     const products = [makeShopifyProduct({ id: 1, variantId: 101 })];
     mockFetchAllProducts.mockResolvedValue(products);
 
     await syncProductsPOST();
 
-    // findFirst must be called with shopifyVariantId
-    expect((prismaMock.product as any).findFirst).toHaveBeenCalledWith({
-      where: { shopifyVariantId: '101' },
-    });
-
-    // Must NOT be called with shopifyProductId for matching
-    for (const call of (prismaMock.product as any).findFirst.mock.calls) {
-      expect(call[0].where).not.toHaveProperty('shopifyProductId');
-    }
+    // upsert must be called with shopifyVariantId as the where clause
+    expect((prismaMock.product as any).upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { shopifyVariantId: '101' },
+      })
+    );
   });
 
-  it('should update the correct product row when an existing variant is found', async () => {
-    const existingProduct = { id: 'existing-prod-uuid', shopifyVariantId: '101' };
-    (prismaMock.product as any).findFirst.mockResolvedValue(existingProduct);
+  it('should update existing product when variant already exists', async () => {
+    // Simulate an existing product by making upsert return different timestamps
+    const created = new Date('2026-01-01');
+    const updated = new Date('2026-03-26');
+    (prismaMock.product as any).upsert.mockResolvedValue({
+      id: 'existing-prod-uuid',
+      createdAt: created,
+      updatedAt: updated,
+    });
 
     const products = [makeShopifyProduct({ id: 1, variantId: 101 })];
     mockFetchAllProducts.mockResolvedValue(products);
@@ -222,19 +228,10 @@ describe('Variant-based Upsert (regression)', () => {
     const body = await res.json();
 
     expect(body.success).toBe(true);
-    // Should call update, not create
-    expect(prismaMock.product.update).toHaveBeenCalledTimes(1);
-    expect(prismaMock.product.create).not.toHaveBeenCalled();
-
-    // Should update by the existing product's id
-    expect(prismaMock.product.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 'existing-prod-uuid' },
-      })
-    );
+    expect((prismaMock.product as any).upsert).toHaveBeenCalledTimes(1);
   });
 
-  it('should create 3 product rows for a product with 3 variants (all new)', async () => {
+  it('should upsert 3 product rows for a product with 3 variants', async () => {
     const product = makeShopifyProduct({
       id: 5,
       variants: [
@@ -250,11 +247,11 @@ describe('Variant-based Upsert (regression)', () => {
     const body = await res.json();
 
     expect(body.success).toBe(true);
-    expect(prismaMock.product.create).toHaveBeenCalledTimes(3);
+    expect((prismaMock.product as any).upsert).toHaveBeenCalledTimes(3);
 
-    // Verify each create call has the correct shopifyVariantId
-    const variantIds = prismaMock.product.create.mock.calls.map(
-      (call: any) => call[0].data.shopifyVariantId
+    // Verify each upsert uses the correct shopifyVariantId
+    const variantIds = (prismaMock.product as any).upsert.mock.calls.map(
+      (call: any) => call[0].where.shopifyVariantId
     );
     expect(variantIds).toEqual(expect.arrayContaining(['501', '502', '503']));
   });

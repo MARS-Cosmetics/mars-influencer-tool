@@ -42,15 +42,24 @@ describe('Product Model Schema Constraints (regression)', () => {
     productBlock = extractModelBlock('Product');
   });
 
-  it('should have a @unique constraint on sku (required for idempotent seeding)', () => {
-    // Find the sku line
+  it('should NOT have a @unique constraint on sku (Shopify SKUs are not unique)', () => {
     const skuLine = productBlock.split('\n').find((line) => {
       const trimmed = line.trim();
       return trimmed.startsWith('sku') && !trimmed.startsWith('//');
     });
 
     expect(skuLine).toBeDefined();
-    expect(skuLine).toContain('@unique');
+    expect(skuLine).not.toContain('@unique');
+  });
+
+  it('should have a @unique constraint on shopifyVariantId', () => {
+    const variantLine = productBlock.split('\n').find((line) => {
+      const trimmed = line.trim();
+      return trimmed.startsWith('shopifyVariantId') && !trimmed.startsWith('//');
+    });
+
+    expect(variantLine).toBeDefined();
+    expect(variantLine).toContain('@unique');
   });
 
   it('should NOT have a @@unique constraint that includes sku', () => {

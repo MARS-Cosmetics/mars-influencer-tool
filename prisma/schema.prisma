@@ -597,7 +597,7 @@ model Product {
   id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   brandId          String   @map("brand_id") @db.Uuid
   name             String
-  sku              String?  @unique
+  sku              String?
   description      String?
   mrp              Decimal? @db.Decimal(10, 2)
   imageUrl         String?  @map("image_url")
@@ -606,7 +606,7 @@ model Product {
 
   // Shopify sync
   shopifyProductId  String?  @map("shopify_product_id")
-  shopifyVariantId  String?  @map("shopify_variant_id")
+  shopifyVariantId  String?  @unique @map("shopify_variant_id")
   shopifyInventoryItemId String? @map("shopify_inventory_item_id")
   inventoryQuantity Int?     @map("inventory_quantity")
   shopifyImageUrl   String?  @map("shopify_image_url")

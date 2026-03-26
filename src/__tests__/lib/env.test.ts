@@ -369,8 +369,10 @@ describe("Environment Configuration", () => {
       expect(seedContent).toContain("user.upsert");
     });
 
-    it("should use upsert for products", () => {
-      expect(seedContent).toContain("product.upsert");
+    it("should use findFirst + create/update for products (SKU not unique)", () => {
+      expect(seedContent).toContain("product.findFirst");
+      expect(seedContent).toContain("product.update");
+      expect(seedContent).toContain("product.create");
     });
 
     it("should use upsert for payment terms", () => {

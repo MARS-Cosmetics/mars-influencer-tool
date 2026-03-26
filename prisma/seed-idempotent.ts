@@ -100,11 +100,15 @@ async function seedProducts(brandIds: { cosmetics: string; skincare: string }) {
 
   let count = 0;
   for (const product of products) {
-    if (product.sku) {
-      await prisma.product.upsert({
-        where: { sku: product.sku },
-        update: { name: product.name, mrp: product.mrp, category: product.category, brandId: product.brandId },
-        create: { ...product, isActive: true },
+    // SKU is not unique (Shopify can have duplicates), so use findFirst + create/update
+    const existing = product.sku
+      ? await prisma.product.findFirst({ where: { sku: product.sku, brandId: product.brandId } })
+      : null;
+
+    if (existing) {
+      await prisma.product.update({
+        where: { id: existing.id },
+        data: { name: product.name, mrp: product.mrp, category: product.category },
       });
     } else {
       await prisma.product.create({ data: { ...product, isActive: true } });

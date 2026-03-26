@@ -29,56 +29,35 @@ export async function POST() {
       for (const variant of product.variants) {
         const imageSrc = product.image?.src ?? product.images?.[0]?.src ?? null;
 
-        // Look up by shopifyVariantId first, then by SKU as fallback
-        let existing = await prisma.product.findFirst({
-          where: { shopifyVariantId: String(variant.id) },
-        });
-
-        if (!existing && variant.sku) {
-          existing = await prisma.product.findFirst({
-            where: { sku: variant.sku },
-          });
-        }
+        const variantIdStr = String(variant.id);
 
         const data = {
           name: product.title,
-          sku: variant.sku || null, // null if empty to avoid unique constraint issues
+          sku: variant.sku || null,
           mrp: variant.price ? parseFloat(variant.price) : undefined,
           category: product.product_type || undefined,
           shopifyImageUrl: imageSrc,
           imageUrl: imageSrc,
           isActive: product.status === "active",
           shopifyProductId: String(product.id),
-          shopifyVariantId: String(variant.id),
           shopifyInventoryItemId: String(variant.inventory_item_id),
           inventoryQuantity: variant.inventory_quantity,
           shopifyLastSyncAt: new Date(),
           brandId: brand.id,
         };
 
-        if (existing) {
-          await prisma.product.update({
-            where: { id: existing.id },
-            data,
-          });
-          itemsUpdated++;
-        } else {
-          // Check if SKU exists before creating to avoid unique constraint error
-          if (variant.sku) {
-            const skuExists = await prisma.product.findFirst({
-              where: { sku: variant.sku },
-            });
-            if (skuExists) {
-              await prisma.product.update({
-                where: { id: skuExists.id },
-                data,
-              });
-              itemsUpdated++;
-              continue;
-            }
-          }
-          await prisma.product.create({ data: { ...data, sku: data.sku || null } });
+        // Upsert by shopifyVariantId (the true unique Shopify identifier)
+        const result = await prisma.product.upsert({
+          where: { shopifyVariantId: variantIdStr },
+          update: data,
+          create: { ...data, shopifyVariantId: variantIdStr },
+        });
+
+        // Check if it was created or updated by comparing timestamps
+        if (result.createdAt.getTime() === result.updatedAt.getTime()) {
           itemsCreated++;
+        } else {
+          itemsUpdated++;
         }
 
         if (variant.inventory_item_id) {
