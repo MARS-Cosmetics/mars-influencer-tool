@@ -156,6 +156,8 @@ export default function NewCollaborationPage() {
     agencyCommissionPct: "",
   });
 
+  const [formErrors, setFormErrors] = useState<Record<string, boolean>>({});
+
   useEffect(() => {
     // Fetch influencers
     fetch("/api/influencers?limit=500")
@@ -469,6 +471,9 @@ export default function NewCollaborationPage() {
 
   function setField(name: string, value: string) {
     setForm((prev) => ({ ...prev, [name]: value }));
+    if (formErrors[name]) {
+      setFormErrors((prev) => { const next = { ...prev }; delete next[name]; return next; });
+    }
   }
 
   const hasOutOfStock = products.some(
@@ -478,10 +483,23 @@ export default function NewCollaborationPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    if (!form.influencerId || !form.brandId || !form.assignedTo) {
-      toast.error("Please fill in all required fields");
+    const errors: Record<string, boolean> = {};
+    if (!form.influencerId) errors.influencerId = true;
+    if (!form.brandId) errors.brandId = true;
+    if (!form.assignedTo) errors.assignedTo = true;
+    if (!form.type) errors.type = true;
+    if (form.type === "paid" && !form.agreedAmount) errors.agreedAmount = true;
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      const fieldNames = Object.keys(errors).map(k => {
+        const map: Record<string, string> = { influencerId: "Influencer", brandId: "Brand", assignedTo: "Assigned To", type: "Type", agreedAmount: "Agreed Amount" };
+        return map[k] || k;
+      });
+      toast.error(`Please fill required fields: ${fieldNames.join(", ")}`);
       return;
     }
+    setFormErrors({});
 
     if (addressCheck === "no_address") {
       toast.error("Influencer must have an address before creating a collaboration");
@@ -574,7 +592,7 @@ export default function NewCollaborationPage() {
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label>Influencer *</Label>
+              <Label>Influencer <span className="text-red-500">*</span></Label>
               <SearchableSelect
                 options={influencerOptions}
                 value={form.influencerId}
@@ -582,6 +600,7 @@ export default function NewCollaborationPage() {
                 placeholder="Search influencer..."
                 searchPlaceholder="Type name or handle..."
                 emptyMessage="No influencers found."
+                className={formErrors.influencerId ? "ring-2 ring-red-500 rounded-lg" : ""}
               />
 
               {/* Influencer info card */}
@@ -703,13 +722,14 @@ export default function NewCollaborationPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>Brand *</Label>
+              <Label>Brand <span className="text-red-500">*</span></Label>
               <SearchableSelect
                 options={brandOptions}
                 value={form.brandId}
                 onChange={(v) => setField("brandId", v)}
                 placeholder="Select brand..."
                 searchPlaceholder="Search brands..."
+                className={formErrors.brandId ? "ring-2 ring-red-500 rounded-lg" : ""}
               />
             </div>
 
@@ -725,13 +745,14 @@ export default function NewCollaborationPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>Assigned To *</Label>
+              <Label>Assigned To <span className="text-red-500">*</span></Label>
               <SearchableSelect
                 options={userOptions}
                 value={form.assignedTo}
                 onChange={(v) => setField("assignedTo", v)}
                 placeholder="Select team member..."
                 searchPlaceholder="Search by name or email..."
+                className={formErrors.assignedTo ? "ring-2 ring-red-500 rounded-lg" : ""}
               />
             </div>
           </CardContent>
@@ -744,14 +765,14 @@ export default function NewCollaborationPage() {
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="type">Collaboration Type *</Label>
+              <Label htmlFor="type">Collaboration Type <span className="text-red-500">*</span></Label>
               <select
                 id="type"
                 name="type"
                 value={form.type}
                 onChange={handleChange}
                 required
-                className={selectClass}
+                className={`${selectClass} ${formErrors.type ? "ring-2 ring-red-500" : ""}`}
               >
                 <option value="paid">Paid</option>
                 <option value="barter">Barter</option>
@@ -1045,7 +1066,7 @@ export default function NewCollaborationPage() {
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="agreedAmount">Agreed Amount</Label>
+              <Label htmlFor="agreedAmount">Agreed Amount {form.type === "paid" && <span className="text-red-500">*</span>}</Label>
               <Input
                 id="agreedAmount"
                 name="agreedAmount"
@@ -1055,6 +1076,7 @@ export default function NewCollaborationPage() {
                 onChange={handleChange}
                 placeholder={form.type === "barter" ? "N/A (Barter)" : "e.g. 50000"}
                 disabled={form.type === "barter"}
+                className={formErrors.agreedAmount ? "ring-2 ring-red-500" : ""}
               />
             </div>
 
