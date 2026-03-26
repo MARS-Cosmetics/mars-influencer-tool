@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Plus, Search, Handshake } from "lucide-react";
+import { InlineStatusSelect } from "./inline-status-select";
 
 function formatCurrency(amount: unknown): string {
   if (amount === null || amount === undefined) return "-";
@@ -244,11 +245,10 @@ export default async function CollaborationsPage(props: {
                       </span>
                     </TableCell>
                     <TableCell>
-                      <span
-                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[collab.status] || "bg-gray-100 text-gray-800"}`}
-                      >
-                        {statusLabels[collab.status] || collab.status}
-                      </span>
+                      <InlineStatusSelect
+                        collaborationId={collab.id}
+                        currentStatus={collab.status}
+                      />
                     </TableCell>
                     <TableCell>{formatCurrency(collab.agreedAmount as unknown as number)}</TableCell>
                     <TableCell>
