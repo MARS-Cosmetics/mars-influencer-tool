@@ -173,6 +173,7 @@ export async function PUT(
     }
 
     // Auto-create Shopify order when status changes to "confirmed" and no order exists
+    // Uses database-level atomic check to prevent race conditions / duplicate orders
     if (
       body.status === "confirmed" &&
       previousCollab &&
@@ -180,6 +181,24 @@ export async function PUT(
       !previousCollab.shopifyOrderId
     ) {
       try {
+        // Atomic lock: only proceed if shopifyOrderId is still null
+        // This prevents duplicate orders from concurrent requests
+        const lockResult = await prisma.collaboration.updateMany({
+          where: {
+            id,
+            shopifyOrderId: null, // Only matches if no order has been created yet
+          },
+          data: {
+            shopifyOrderId: `pending-${Date.now()}`, // Temporary placeholder to claim the lock
+          },
+        });
+
+        // If no rows were updated, another request already claimed this
+        if (lockResult.count === 0) {
+          console.log(`Shopify order already being created for collab ${id}, skipping`);
+          return NextResponse.json(collaboration);
+        }
+
         // Fetch full collaboration data for order creation
         const fullCollab = await prisma.collaboration.findUnique({
           where: { id },
@@ -246,16 +265,24 @@ export async function PUT(
           }
         }
 
-        // Log warnings if order wasn't created
+        // If order wasn't created, release the lock
         if (shopifyWarnings.length > 0) {
+          await prisma.collaboration.update({
+            where: { id },
+            data: { shopifyOrderId: null }, // Release lock
+          });
           console.warn(`Shopify order not created for collab ${id}:`, shopifyWarnings);
-          // Include warnings in response so UI can show them
           return NextResponse.json({
             ...collaboration,
             shopifyWarnings
           });
         }
       } catch (shopifyError) {
+        // Release lock on failure so it can be retried
+        await prisma.collaboration.update({
+          where: { id },
+          data: { shopifyOrderId: null },
+        }).catch(() => {}); // Don't fail if cleanup fails
         console.error("Shopify order creation failed (non-blocking):", shopifyError);
         // Don't fail the collaboration update if Shopify fails
       }
