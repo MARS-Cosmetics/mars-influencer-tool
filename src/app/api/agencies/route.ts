@@ -69,6 +69,15 @@ export async function POST(request: Request) {
       },
     });
 
+    await prisma.activityLog.create({
+      data: {
+        entityType: "agency",
+        entityId: agency.id,
+        action: "created",
+        description: `New agency created: ${agency.name || agency.id}`,
+      },
+    });
+
     return NextResponse.json(agency, { status: 201 });
   } catch (error) {
     console.error("Failed to create agency:", error);

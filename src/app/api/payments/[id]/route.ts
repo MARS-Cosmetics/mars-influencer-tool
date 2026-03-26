@@ -67,10 +67,34 @@ export async function PUT(
       body.paidAt = null;
     }
 
+    const previous = await prisma.payment.findUnique({
+      where: { id },
+      select: { status: true, amount: true },
+    });
+
     const payment = await prisma.payment.update({
       where: { id },
       data: body,
     });
+
+    const trackFields = ["status", "amount"];
+    for (const field of trackFields) {
+      const oldVal = String((previous as any)?.[field] ?? "");
+      const newVal = String((payment as any)[field] ?? "");
+      if (oldVal !== newVal) {
+        await prisma.activityLog.create({
+          data: {
+            entityType: "payment",
+            entityId: id,
+            action: field === "status" ? "status_change" : "field_update",
+            field,
+            oldValue: oldVal,
+            newValue: newVal,
+            description: `${field} updated`,
+          },
+        });
+      }
+    }
 
     return NextResponse.json(payment);
   } catch (error) {

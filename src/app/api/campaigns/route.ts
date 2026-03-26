@@ -53,6 +53,15 @@ export async function POST(request: Request) {
       include: { brand: true },
     });
 
+    await prisma.activityLog.create({
+      data: {
+        entityType: "campaign",
+        entityId: campaign.id,
+        action: "created",
+        description: `New campaign created: ${campaign.name || campaign.id}`,
+      },
+    });
+
     return NextResponse.json(campaign, { status: 201 });
   } catch (error) {
     console.error("Failed to create campaign:", error);

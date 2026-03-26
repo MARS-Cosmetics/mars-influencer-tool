@@ -183,7 +183,7 @@ export default async function CollaborationDetailPage(props: {
   const searchParams = await props.searchParams;
   const needsDueDate = searchParams?.needsDueDate === "true";
 
-  const deliverables = collaboration.deliverables as unknown;
+  // deliverables are now shown as linked assets — no need to parse JSON
 
   return (
     <div className="space-y-6">
@@ -431,36 +431,70 @@ export default async function CollaborationDetailPage(props: {
               </CardContent>
             </Card>
 
-            {/* Brief & Deliverables */}
+            {/* Brief */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Calendar className="h-4 w-4" />
-                  Brief & Deliverables
+                  Brief
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent>
                 {collaboration.brief ? (
-                  <div>
-                    <span className="text-sm font-medium text-gray-700">Brief</span>
-                    <p className="mt-1 text-sm text-gray-600 whitespace-pre-wrap">
-                      {collaboration.brief}
-                    </p>
-                  </div>
+                  <p className="text-sm text-gray-600 whitespace-pre-wrap">
+                    {collaboration.brief}
+                  </p>
                 ) : (
                   <p className="text-sm text-gray-400">No brief provided</p>
                 )}
-                {deliverables != null ? (
-                  <>
-                    <Separator />
-                    <div>
-                      <span className="text-sm font-medium text-gray-700">Deliverables</span>
-                      <pre className="mt-1 rounded-md bg-gray-50 p-3 text-xs text-gray-700 overflow-x-auto">
-                        {JSON.stringify(deliverables, null, 2)}
-                      </pre>
-                    </div>
-                  </>
-                ) : null}
+              </CardContent>
+            </Card>
+
+            {/* Deliverables / Linked Assets Summary */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Image className="h-4 w-4" />
+                  Deliverables ({collaboration.assets.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {collaboration.assets.length === 0 ? (
+                  <p className="text-sm text-gray-400">No deliverables created yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {collaboration.assets.map((asset) => (
+                      <div key={asset.id} className="flex items-center justify-between rounded-lg border px-3 py-2">
+                        <div className="flex items-center gap-3">
+                          <span className="inline-flex items-center rounded-full bg-blue-100 text-blue-700 px-2 py-0.5 text-xs font-medium capitalize">
+                            {asset.platform}
+                          </span>
+                          <span className="text-sm capitalize">{asset.contentType.replace(/_/g, " ")}</span>
+                          {asset.hasAdRights && (
+                            <span className="inline-flex items-center rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-xs font-medium">
+                              Ad Rights
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {asset.dueDate && (
+                            <span className="text-xs text-muted-foreground">
+                              Due: {formatDate(asset.dueDate)}
+                            </span>
+                          )}
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${assetStatusColors[asset.status] || "bg-gray-100 text-gray-800"}`}
+                          >
+                            {asset.status.replace(/_/g, " ")}
+                          </span>
+                          <Link href={`/assets/${asset.id}`} className="text-xs text-blue-600 hover:underline">
+                            View
+                          </Link>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -491,13 +525,29 @@ export default async function CollaborationDetailPage(props: {
                   {collaboration.products.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={5} className="text-center py-8 text-gray-500">
-                        No products linked to this collaboration.
+                        No products linked to this collaboration. Products are added when creating the collaboration.
                       </TableCell>
                     </TableRow>
                   ) : (
                     collaboration.products.map((cp) => (
                       <TableRow key={cp.id}>
-                        <TableCell className="font-medium">{cp.product.name}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            {cp.product.imageUrl && (
+                              <img
+                                src={cp.product.imageUrl}
+                                alt={cp.product.name}
+                                className="h-10 w-10 rounded object-cover"
+                              />
+                            )}
+                            <div>
+                              <div className="font-medium">{cp.product.name}</div>
+                              {cp.product.category && (
+                                <div className="text-xs text-muted-foreground">{cp.product.category}</div>
+                              )}
+                            </div>
+                          </div>
+                        </TableCell>
                         <TableCell>{cp.product.sku || "-"}</TableCell>
                         <TableCell>{formatCurrency(cp.product.mrp as unknown as number)}</TableCell>
                         <TableCell>{cp.quantity}</TableCell>

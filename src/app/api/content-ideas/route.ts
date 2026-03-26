@@ -99,6 +99,15 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    await prisma.activityLog.create({
+      data: {
+        entityType: "content_idea",
+        entityId: contentIdea.id,
+        action: "created",
+        description: `New content_idea created: ${contentIdea.title || contentIdea.id}`,
+      },
+    });
+
     return NextResponse.json(contentIdea, { status: 201 });
   } catch (error) {
     console.error("Failed to create content idea:", error);

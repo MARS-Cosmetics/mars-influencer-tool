@@ -148,6 +148,15 @@ export async function POST(request: NextRequest) {
       data: body,
     });
 
+    await prisma.activityLog.create({
+      data: {
+        entityType: "influencer",
+        entityId: influencer.id,
+        action: "created",
+        description: `New influencer created: ${influencer.name || influencer.id}`,
+      },
+    });
+
     return NextResponse.json(influencer, { status: 201 });
   } catch (error) {
     console.error("Failed to create influencer:", error);

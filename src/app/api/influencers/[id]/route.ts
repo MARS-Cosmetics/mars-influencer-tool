@@ -142,10 +142,34 @@ export async function PUT(
       body.dateOfBirth = null;
     }
 
+    const previous = await prisma.influencer.findUnique({
+      where: { id },
+      select: { name: true, email: true, instagramHandle: true, tier: true, status: true },
+    });
+
     const influencer = await prisma.influencer.update({
       where: { id },
       data: body,
     });
+
+    const trackFields = ["name", "email", "instagramHandle", "tier", "status"];
+    for (const field of trackFields) {
+      const oldVal = String((previous as any)?.[field] ?? "");
+      const newVal = String((influencer as any)[field] ?? "");
+      if (oldVal !== newVal) {
+        await prisma.activityLog.create({
+          data: {
+            entityType: "influencer",
+            entityId: id,
+            action: field === "status" ? "status_change" : field === "tier" ? "status_change" : "field_update",
+            field,
+            oldValue: oldVal,
+            newValue: newVal,
+            description: `${field} updated`,
+          },
+        });
+      }
+    }
 
     return NextResponse.json(influencer);
   } catch (error) {
@@ -168,6 +192,15 @@ export async function DELETE(
     await prisma.influencer.update({
       where: { id },
       data: { status: "inactive" },
+    });
+
+    await prisma.activityLog.create({
+      data: {
+        entityType: "influencer",
+        entityId: id,
+        action: "deleted",
+        description: `Influencer deleted/deactivated`,
+      },
     });
 
     return NextResponse.json({ success: true });

@@ -92,10 +92,34 @@ export async function PUT(
       body.hasAdRights = body.hasAdRights === true || body.hasAdRights === "true";
     }
 
+    const previous = await prisma.asset.findUnique({
+      where: { id },
+      select: { status: true, contentRating: true },
+    });
+
     const asset = await prisma.asset.update({
       where: { id },
       data: body,
     });
+
+    const trackFields = ["status", "contentRating"];
+    for (const field of trackFields) {
+      const oldVal = String((previous as any)?.[field] ?? "");
+      const newVal = String((asset as any)[field] ?? "");
+      if (oldVal !== newVal) {
+        await prisma.activityLog.create({
+          data: {
+            entityType: "asset",
+            entityId: id,
+            action: field === "status" ? "status_change" : "field_update",
+            field,
+            oldValue: oldVal,
+            newValue: newVal,
+            description: `${field} updated`,
+          },
+        });
+      }
+    }
 
     // Auto-recompute collaboration dueDate from latest asset dueDate
     if (asset.collaborationId && body.dueDate !== undefined) {

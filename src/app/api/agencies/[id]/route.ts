@@ -41,6 +41,11 @@ export async function PUT(
     const { id } = await params;
     const body = await request.json();
 
+    const previous = await prisma.agency.findUnique({
+      where: { id },
+      select: { name: true, commissionPct: true, isActive: true },
+    });
+
     const agency = await prisma.agency.update({
       where: { id },
       data: {
@@ -59,6 +64,25 @@ export async function PUT(
         isActive: body.isActive,
       },
     });
+
+    const trackFields = ["name", "commissionPct", "isActive"];
+    for (const field of trackFields) {
+      const oldVal = String((previous as any)?.[field] ?? "");
+      const newVal = String((agency as any)[field] ?? "");
+      if (oldVal !== newVal) {
+        await prisma.activityLog.create({
+          data: {
+            entityType: "agency",
+            entityId: id,
+            action: "field_update",
+            field,
+            oldValue: oldVal,
+            newValue: newVal,
+            description: `${field} updated`,
+          },
+        });
+      }
+    }
 
     return NextResponse.json(agency);
   } catch (error) {
@@ -79,6 +103,15 @@ export async function DELETE(
     await prisma.agency.update({
       where: { id },
       data: { isActive: false },
+    });
+
+    await prisma.activityLog.create({
+      data: {
+        entityType: "agency",
+        entityId: id,
+        action: "deleted",
+        description: `Agency deleted/deactivated`,
+      },
     });
 
     return NextResponse.json({ success: true });

@@ -89,6 +89,15 @@ export async function POST(request: NextRequest) {
       data: body,
     });
 
+    await prisma.activityLog.create({
+      data: {
+        entityType: "payment",
+        entityId: payment.id,
+        action: "created",
+        description: `New payment created: ${payment.id}`,
+      },
+    });
+
     return NextResponse.json(payment, { status: 201 });
   } catch (error) {
     console.error("Failed to create payment:", error);

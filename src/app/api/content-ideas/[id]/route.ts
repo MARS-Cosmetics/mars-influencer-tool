@@ -74,6 +74,11 @@ export async function PUT(
       }
     }
 
+    const previous = await prisma.contentIdea.findUnique({
+      where: { id },
+      select: { status: true, priority: true, title: true },
+    });
+
     const contentIdea = await prisma.contentIdea.update({
       where: { id },
       data: body,
@@ -83,6 +88,25 @@ export async function PUT(
         influencer: { select: { id: true, name: true } },
       },
     });
+
+    const trackFields = ["status", "priority", "title"];
+    for (const field of trackFields) {
+      const oldVal = String((previous as any)?.[field] ?? "");
+      const newVal = String((contentIdea as any)[field] ?? "");
+      if (oldVal !== newVal) {
+        await prisma.activityLog.create({
+          data: {
+            entityType: "content_idea",
+            entityId: id,
+            action: field === "status" ? "status_change" : field === "priority" ? "status_change" : "field_update",
+            field,
+            oldValue: oldVal,
+            newValue: newVal,
+            description: `${field} updated`,
+          },
+        });
+      }
+    }
 
     return NextResponse.json(contentIdea);
   } catch (error) {
@@ -104,6 +128,15 @@ export async function DELETE(
 
     await prisma.contentIdea.delete({
       where: { id },
+    });
+
+    await prisma.activityLog.create({
+      data: {
+        entityType: "content_idea",
+        entityId: id,
+        action: "deleted",
+        description: `Content idea deleted/deactivated`,
+      },
     });
 
     return NextResponse.json({ success: true });

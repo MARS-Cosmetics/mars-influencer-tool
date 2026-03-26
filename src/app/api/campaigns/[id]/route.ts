@@ -44,6 +44,11 @@ export async function PUT(
     const { id } = await params;
     const body = await request.json();
 
+    const previous = await prisma.campaign.findUnique({
+      where: { id },
+      select: { status: true, totalBudget: true, name: true },
+    });
+
     const campaign = await prisma.campaign.update({
       where: { id },
       data: {
@@ -59,6 +64,25 @@ export async function PUT(
       },
       include: { brand: true },
     });
+
+    const trackFields = ["status", "totalBudget", "name"];
+    for (const field of trackFields) {
+      const oldVal = String((previous as any)?.[field] ?? "");
+      const newVal = String((campaign as any)[field] ?? "");
+      if (oldVal !== newVal) {
+        await prisma.activityLog.create({
+          data: {
+            entityType: "campaign",
+            entityId: id,
+            action: field === "status" ? "status_change" : field === "totalBudget" ? "field_update" : "field_update",
+            field,
+            oldValue: oldVal,
+            newValue: newVal,
+            description: `${field} updated`,
+          },
+        });
+      }
+    }
 
     return NextResponse.json(campaign);
   } catch (error) {
@@ -77,6 +101,16 @@ export async function DELETE(
   try {
     const { id } = await params;
     await prisma.campaign.delete({ where: { id } });
+
+    await prisma.activityLog.create({
+      data: {
+        entityType: "campaign",
+        entityId: id,
+        action: "deleted",
+        description: `Campaign deleted/deactivated`,
+      },
+    });
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Failed to delete campaign:", error);

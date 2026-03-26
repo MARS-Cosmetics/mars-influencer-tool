@@ -53,6 +53,22 @@ export async function POST(
       },
     });
 
+    const oldRating = String(existing.contentRating ?? "");
+    const newRating = String(updatedAsset.contentRating ?? "");
+    if (oldRating !== newRating) {
+      await prisma.activityLog.create({
+        data: {
+          entityType: "asset",
+          entityId: id,
+          action: "field_update",
+          field: "contentRating",
+          oldValue: oldRating,
+          newValue: newRating,
+          description: `contentRating updated`,
+        },
+      });
+    }
+
     return NextResponse.json(updatedAsset);
   } catch (error) {
     console.error("Error rating asset:", error);
