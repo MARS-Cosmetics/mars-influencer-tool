@@ -29,13 +29,20 @@ export async function POST() {
       for (const variant of product.variants) {
         const imageSrc = product.image?.src ?? product.images?.[0]?.src ?? null;
 
-        const existing = await prisma.product.findFirst({
+        // Look up by shopifyVariantId first, then by SKU as fallback
+        let existing = await prisma.product.findFirst({
           where: { shopifyVariantId: String(variant.id) },
         });
 
+        if (!existing && variant.sku) {
+          existing = await prisma.product.findFirst({
+            where: { sku: variant.sku },
+          });
+        }
+
         const data = {
           name: product.title,
-          sku: variant.sku ?? undefined,
+          sku: variant.sku || null, // null if empty to avoid unique constraint issues
           mrp: variant.price ? parseFloat(variant.price) : undefined,
           category: product.product_type || undefined,
           shopifyImageUrl: imageSrc,
@@ -56,7 +63,21 @@ export async function POST() {
           });
           itemsUpdated++;
         } else {
-          await prisma.product.create({ data });
+          // Check if SKU exists before creating to avoid unique constraint error
+          if (variant.sku) {
+            const skuExists = await prisma.product.findFirst({
+              where: { sku: variant.sku },
+            });
+            if (skuExists) {
+              await prisma.product.update({
+                where: { id: skuExists.id },
+                data,
+              });
+              itemsUpdated++;
+              continue;
+            }
+          }
+          await prisma.product.create({ data: { ...data, sku: data.sku || null } });
           itemsCreated++;
         }
 
