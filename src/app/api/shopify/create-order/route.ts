@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Build tags (Shopify doesn't allow colons in tags)
-    const tags = `influencer, ${collaboration.type}, collab-${collaboration.id}`;
+    const tags = `influencer, ${collaboration.type}, collab-${collaboration.id.slice(0, 8)}`;
 
     // Build note
     const handle = inf.instagramHandle || inf.youtubeHandle || "unknown";

@@ -239,7 +239,7 @@ export async function PUT(
           } else {
             const orderInput: ShopifyOrderInput = {
               line_items: lineItems,
-              tags: `influencer, ${fullCollab.type}, collab-${id}`,
+              tags: `influencer, ${fullCollab.type}, collab-${id.slice(0, 8)}`,
               note: `Influencer: ${inf.name}${inf.instagramHandle ? ` (@${inf.instagramHandle})` : ""} | Collaboration: ${id}`,
               shipping_address: {
                 first_name: inf.name.split(" ")[0] || inf.name,

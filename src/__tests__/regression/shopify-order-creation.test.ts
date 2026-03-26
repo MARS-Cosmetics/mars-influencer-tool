@@ -190,6 +190,21 @@ describe('Shopify Order Tags (regression)', () => {
       expect(match[1]).toMatch(/collab-\$\{/);
     }
   });
+
+  it('collab tag should use id.slice(0,8) to stay under 40 chars (Shopify limit)', () => {
+    // Shopify rejects any single tag longer than 40 characters
+    // Full UUID is 36 chars, "collab-" prefix + 36 = 42 chars (too long!)
+    // Fix: use id.slice(0, 8) so "collab-" + 8 = 15 chars (safe)
+    const sources = [createOrderSource, collaborationRouteSource];
+
+    for (const source of sources) {
+      const collabTagMatches = [...source.matchAll(/collab-\$\{[^}]+\}/g)];
+      for (const match of collabTagMatches) {
+        // Must use .slice(0, 8) or substring(0, 8) to truncate the UUID
+        expect(match[0]).toMatch(/slice\(0,\s*8\)|substring\(0,\s*8\)/);
+      }
+    }
+  });
 });
 
 // ============================================================
