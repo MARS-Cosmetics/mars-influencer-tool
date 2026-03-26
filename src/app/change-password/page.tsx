@@ -80,9 +80,13 @@ export default function ChangePasswordPage() {
       // Update session so mustChangePassword is now false
       await update();
 
-      toast.success("Password changed successfully");
-      router.push("/");
-      router.refresh();
+      toast.success("Password changed successfully! Redirecting...");
+
+      // Use window.location for a full page reload so the middleware
+      // picks up the updated JWT cookie with mustChangePassword=false
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 1000);
     } catch {
       setError("An unexpected error occurred");
       setLoading(false);
