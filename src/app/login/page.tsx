@@ -88,7 +88,7 @@ export default function LoginPage() {
                 id="email"
                 name="email"
                 type="email"
-                placeholder="you@mars.com"
+                placeholder="you@marscosmetics.in"
                 required
                 className="h-10 border-black/15 bg-white"
               />

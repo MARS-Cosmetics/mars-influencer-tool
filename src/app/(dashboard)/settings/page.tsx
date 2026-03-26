@@ -1,12 +1,34 @@
 "use client";
 
 import { useSession } from "next-auth/react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Shield } from "lucide-react";
 
 export default function SettingsPage() {
   const { data: session } = useSession();
+  const [lastChanged, setLastChanged] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function fetchLastChange() {
+      try {
+        const res = await fetch("/api/auth/me");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.lastPasswordChange) {
+            setLastChanged(data.lastPasswordChange);
+          }
+        }
+      } catch {
+        // Silently ignore - the field is optional
+      }
+    }
+    fetchLastChange();
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -32,6 +54,39 @@ export default function SettingsPage() {
                 {session?.user?.role}
               </Badge>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Shield className="h-5 w-5" />
+            Security
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-medium">Change Password</p>
+              {lastChanged ? (
+                <p className="text-sm text-gray-500">
+                  Last changed:{" "}
+                  {new Date(lastChanged).toLocaleDateString("en-IN", {
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </p>
+              ) : (
+                <p className="text-sm text-gray-500">
+                  Update your password regularly to keep your account secure
+                </p>
+              )}
+            </div>
+            <Button variant="outline" asChild>
+              <Link href="/change-password">Change Password</Link>
+            </Button>
           </div>
         </CardContent>
       </Card>

@@ -66,17 +66,17 @@ async function seedUsers(brandIds: { cosmetics: string; skincare: string }) {
   const userHash = await hash("user123", 12);
 
   const users = [
-    { email: "admin@marscosmetics.in", name: "Admin User", password: passwordHash, role: "admin" as const, brandId: brandIds.cosmetics },
-    { email: "manager@marscosmetics.in", name: "Marketing Manager", password: userHash, role: "manager" as const, brandId: brandIds.cosmetics },
-    { email: "priya@marscosmetics.in", name: "Priya Sharma", password: userHash, role: "user" as const, brandId: brandIds.cosmetics },
-    { email: "rahul@marscosmetics.in", name: "Rahul Verma", password: userHash, role: "user" as const, brandId: brandIds.skincare },
+    { email: "admin@marscosmetics.in", name: "Admin User", password: passwordHash, role: "admin" as const, brandId: brandIds.cosmetics, mustChangePassword: true },
+    { email: "manager@marscosmetics.in", name: "Marketing Manager", password: userHash, role: "manager" as const, brandId: brandIds.cosmetics, mustChangePassword: true },
+    { email: "priya@marscosmetics.in", name: "Priya Sharma", password: userHash, role: "user" as const, brandId: brandIds.cosmetics, mustChangePassword: true },
+    { email: "rahul@marscosmetics.in", name: "Rahul Verma", password: userHash, role: "user" as const, brandId: brandIds.skincare, mustChangePassword: true },
   ];
 
   const created = [];
   for (const user of users) {
     const result = await prisma.user.upsert({
       where: { email: user.email },
-      update: { name: user.name, role: user.role, brandId: user.brandId },
+      update: { name: user.name, role: user.role, brandId: user.brandId, mustChangePassword: false },
       create: user,
     });
     created.push(result);

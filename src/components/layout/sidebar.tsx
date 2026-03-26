@@ -22,12 +22,16 @@ import {
   Flame,
   Settings,
   Globe,
+  Trophy,
 } from "lucide-react";
 
 const navSections = [
   {
     label: "Overview",
-    items: [{ label: "Dashboard", href: "/", icon: LayoutDashboard }],
+    items: [
+      { label: "Dashboard", href: "/", icon: LayoutDashboard },
+      { label: "Leaderboard", href: "/leaderboard", icon: Trophy },
+    ],
   },
   {
     label: "People",

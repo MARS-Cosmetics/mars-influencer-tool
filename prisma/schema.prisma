@@ -246,6 +246,8 @@ model User {
   avatarUrl String?  @map("avatar_url")
   brandId   String?  @map("brand_id") @db.Uuid
   isActive  Boolean  @default(true) @map("is_active")
+  mustChangePassword Boolean @default(true) @map("must_change_password")
+  lastPasswordChange DateTime? @map("last_password_change") @db.Timestamptz()
 
   // Approval hierarchy
   approvalLimit Decimal? @map("approval_limit") @db.Decimal(12, 2) // max collaboration amount user can auto-approve
