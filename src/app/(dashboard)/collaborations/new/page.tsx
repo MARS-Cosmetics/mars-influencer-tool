@@ -808,7 +808,6 @@ export default function NewCollaborationPage() {
               >
                 <option value="paid">Paid</option>
                 <option value="barter">Barter</option>
-                <option value="pr_gifting">PR Gifting</option>
               </select>
             </div>
 

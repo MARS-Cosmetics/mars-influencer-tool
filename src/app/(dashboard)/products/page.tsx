@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { RefreshCw, ShoppingBag } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,11 +65,19 @@ export default async function ProductsPage({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Products</h1>
-        <Link href="/products/new">
-          <Button>
-            <Plus className="mr-1 h-4 w-4" />
-            New Product
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <ShoppingBag className="h-6 w-6" />
+            Products
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Product catalog synced from Shopify. Manage products in your Shopify store.
+          </p>
+        </div>
+        <Link href="/settings/shopify">
+          <Button variant="outline">
+            <RefreshCw className="mr-1 h-4 w-4" />
+            Sync from Shopify
           </Button>
         </Link>
       </div>

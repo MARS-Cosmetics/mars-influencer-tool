@@ -218,7 +218,7 @@ export function getAutoActions(toStatus: string, context: CollaborationContext):
   const actions: string[] = [];
 
   if (toStatus === "confirmed") {
-    if (context.type !== "barter" && context.type !== "pr_gifting") {
+    if (context.type !== "barter") {
       actions.push("create_shopify_order");
     }
     actions.push("create_payment_entries");

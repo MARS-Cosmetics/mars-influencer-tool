@@ -64,13 +64,11 @@ function formatDateTime(date: Date | string | null | undefined): string {
 const typeColors: Record<string, string> = {
   paid: "bg-green-100 text-green-800",
   barter: "bg-blue-100 text-blue-800",
-  pr_gifting: "bg-purple-100 text-purple-800",
 };
 
 const typeLabels: Record<string, string> = {
   paid: "Paid",
   barter: "Barter",
-  pr_gifting: "PR Gifting",
 };
 
 const statusColors: Record<string, string> = {

@@ -105,7 +105,7 @@ export default async function AssetDetailPage(props: {
   });
 
   // CPV Calculation
-  const isBarter = asset.collaboration?.type === "barter" || asset.collaboration?.type === "pr_gifting";
+  const isBarter = asset.collaboration?.type === "barter";
   let cpvDisplay = "—";
   if (isBarter) {
     cpvDisplay = "Barter";

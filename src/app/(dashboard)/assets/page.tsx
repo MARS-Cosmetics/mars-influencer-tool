@@ -18,7 +18,7 @@ import { Plus, Search, ExternalLink, IndianRupee } from "lucide-react";
 
 function getCPV(asset: { views: number | null; collaboration: { type: string; agreedAmount: unknown; _count: { assets: number } } | null }): string {
   if (!asset.collaboration) return "-";
-  if (asset.collaboration.type === "barter" || asset.collaboration.type === "pr_gifting") return "Barter";
+  if (asset.collaboration.type === "barter") return "Barter";
   if (!asset.views || asset.views === 0) return "—";
   const totalAmount = Number(asset.collaboration.agreedAmount || 0);
   if (totalAmount === 0) return "—";

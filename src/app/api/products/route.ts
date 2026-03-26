@@ -46,30 +46,11 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-
-    const product = await prisma.product.create({
-      data: {
-        name: body.name,
-        brandId: body.brandId,
-        sku: body.sku || null,
-        description: body.description || null,
-        mrp: body.mrp ? parseFloat(body.mrp) : null,
-        imageUrl: body.imageUrl || null,
-        category: body.category || null,
-        isActive: body.isActive ?? true,
-      },
-      include: { brand: true },
-    });
-
-    return NextResponse.json(product, { status: 201 });
-  } catch (error) {
-    console.error("Failed to create product:", error);
-    return NextResponse.json(
-      { error: "Failed to create product" },
-      { status: 500 }
-    );
-  }
+// Products are read-only — managed via Shopify sync
+// No manual product creation allowed
+export async function POST() {
+  return NextResponse.json(
+    { error: "Products are managed via Shopify sync. Use Shopify Integration > Sync Now to add products." },
+    { status: 403 }
+  );
 }

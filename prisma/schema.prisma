@@ -664,8 +664,12 @@ model PrParcel {
   shippedAt   DateTime?    @map("shipped_at") @db.Timestamptz()
   deliveredAt DateTime?    @map("delivered_at") @db.Timestamptz()
 
+  // Notes
+  notes String?
+
   // Shopify
-  shopifyOrderId String? @map("shopify_order_id")
+  shopifyOrderId     String? @map("shopify_order_id")
+  shopifyOrderNumber String? @map("shopify_order_number")
 
   // Audit
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()

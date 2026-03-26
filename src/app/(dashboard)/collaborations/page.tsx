@@ -37,13 +37,11 @@ function formatDate(date: Date | string | null | undefined): string {
 const typeColors: Record<string, string> = {
   paid: "bg-green-100 text-green-800",
   barter: "bg-blue-100 text-blue-800",
-  pr_gifting: "bg-purple-100 text-purple-800",
 };
 
 const typeLabels: Record<string, string> = {
   paid: "Paid",
   barter: "Barter",
-  pr_gifting: "PR Gifting",
 };
 
 const statusColors: Record<string, string> = {
@@ -173,7 +171,6 @@ export default async function CollaborationsPage(props: {
                 <option value="">All Types</option>
                 <option value="paid">Paid</option>
                 <option value="barter">Barter</option>
-                <option value="pr_gifting">PR Gifting</option>
               </select>
             </div>
             <div className="min-w-[180px]">
@@ -271,7 +268,7 @@ export default async function CollaborationsPage(props: {
                     <TableCell>{formatCurrency(collab.agreedAmount as unknown as number)}</TableCell>
                     <TableCell>
                       {(() => {
-                        if (collab.type === "barter" || collab.type === "pr_gifting") {
+                        if (collab.type === "barter") {
                           return <Badge className="bg-purple-100 text-purple-700">Barter</Badge>;
                         }
                         const totalViews = collab.assets.reduce((sum: number, a: { views: number | null }) => sum + (a.views || 0), 0);

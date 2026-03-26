@@ -134,7 +134,7 @@ export async function GET(request: NextRequest) {
           entry.paidCollabCount += 1;
         }
       }
-      // barter/pr_gifting: CPV = 0, contributes 0 to cpvSum but counts toward collabCount
+      // barter: CPV = 0, contributes 0 to cpvSum but counts toward collabCount
     }
 
     // Step 4: Calculate final scores and build leaderboard

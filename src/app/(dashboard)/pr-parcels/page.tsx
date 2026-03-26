@@ -3,10 +3,11 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/db";
 import { ParcelStatus } from "@/generated/prisma";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, Package } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -66,11 +67,14 @@ export default async function PrParcelsPage({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">PR Parcels</h1>
+        <div className="flex items-center gap-2">
+          <Package className="h-6 w-6 text-[#A6192E]" />
+          <h1 className="text-2xl font-bold">PR Parcels</h1>
+        </div>
         <Link href="/pr-parcels/new">
-          <Button>
+          <Button className="bg-[#A6192E] hover:bg-[#8a1526] text-white">
             <Plus className="mr-1 h-4 w-4" />
-            New Parcel
+            Quick Create
           </Button>
         </Link>
       </div>
@@ -86,7 +90,7 @@ export default async function PrParcelsPage({
           <select
             name="status"
             defaultValue={status || ""}
-            className="h-8 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm"
+            className="flex h-9 w-full max-w-[180px] rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             <option value="">All Statuses</option>
             {Object.values(ParcelStatus).map((s) => (
@@ -101,55 +105,71 @@ export default async function PrParcelsPage({
         </form>
       </div>
 
-      <div className="rounded-lg border bg-white">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Influencer</TableHead>
-              <TableHead>Brand</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Courier</TableHead>
-              <TableHead>Tracking Number</TableHead>
-              <TableHead>Shipped Date</TableHead>
-              <TableHead>Delivered Date</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {parcels.length === 0 ? (
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-gray-500 py-8">
-                  No PR parcels found.
-                </TableCell>
+                <TableHead>Influencer</TableHead>
+                <TableHead>Brand</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Shopify Order</TableHead>
+                <TableHead>Courier</TableHead>
+                <TableHead>Tracking Number</TableHead>
+                <TableHead>Shipped Date</TableHead>
+                <TableHead>Delivered Date</TableHead>
               </TableRow>
-            ) : (
-              parcels.map((parcel) => (
-                <TableRow key={parcel.id}>
-                  <TableCell>
-                    <Link
-                      href={`/pr-parcels/${parcel.id}`}
-                      className="font-medium text-blue-600 hover:underline"
-                    >
-                      {parcel.influencer.name}
-                    </Link>
+            </TableHeader>
+            <TableBody>
+              {parcels.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center text-gray-500 py-8">
+                    No PR parcels found.
                   </TableCell>
-                  <TableCell>{parcel.brand.name}</TableCell>
-                  <TableCell>
-                    <Badge className={parcelStatusColors[parcel.status]}>
-                      {parcel.status.replace("_", " ")}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{parcel.courierName || "-"}</TableCell>
-                  <TableCell className="font-mono text-sm">
-                    {parcel.trackingNumber || "-"}
-                  </TableCell>
-                  <TableCell>{formatDate(parcel.shippedAt)}</TableCell>
-                  <TableCell>{formatDate(parcel.deliveredAt)}</TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+              ) : (
+                parcels.map((parcel) => (
+                  <TableRow key={parcel.id}>
+                    <TableCell>
+                      <Link
+                        href={`/pr-parcels/${parcel.id}`}
+                        className="font-medium text-blue-600 hover:underline"
+                      >
+                        {parcel.influencer.name}
+                      </Link>
+                    </TableCell>
+                    <TableCell>{parcel.brand.name}</TableCell>
+                    <TableCell>
+                      <Badge className={parcelStatusColors[parcel.status]}>
+                        {parcel.status.replace("_", " ")}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {parcel.shopifyOrderNumber ? (
+                        <span className="text-sm font-medium text-gray-900">
+                          {parcel.shopifyOrderNumber}
+                        </span>
+                      ) : parcel.shopifyOrderId ? (
+                        <span className="text-xs text-gray-500">
+                          ID: {parcel.shopifyOrderId}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 text-xs">--</span>
+                      )}
+                    </TableCell>
+                    <TableCell>{parcel.courierName || "-"}</TableCell>
+                    <TableCell className="font-mono text-sm">
+                      {parcel.trackingNumber || "-"}
+                    </TableCell>
+                    <TableCell>{formatDate(parcel.shippedAt)}</TableCell>
+                    <TableCell>{formatDate(parcel.deliveredAt)}</TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </div>
   );
 }
