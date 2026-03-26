@@ -1,64 +1,55 @@
 import { NextResponse } from "next/server";
+import { fetchProfile, USE_MOCK } from "@/lib/culturex";
 import { fetchPublicProfile } from "@/lib/instagram";
+import { prisma } from "@/lib/db";
 
 export async function GET(
   request: Request,
   props: { params: Promise<{ handle: string }> }
 ) {
   const { handle } = await props.params;
+  const cleanHandle = handle.replace(/^@/, "");
 
-  // Mock CultureX response - replace with real API when ready
-  // In production: fetch(`https://api.culturex.com/v1/profile/${handle}`, { headers: { Authorization: `Bearer ${process.env.CULTUREX_API_KEY}` } })
+  // Check if we already have fresh data (synced in last 24 hours)
+  const existing = await prisma.influencer.findFirst({
+    where: { instagramHandle: cleanHandle },
+    select: {
+      igFollowerCount: true,
+      igEngagementRate: true,
+      metricsLastSyncedAt: true,
+    },
+  });
 
-  const mockData = {
-    found: true,
-    source: "culturex" as "culturex" | "instagram_fallback",
-    handle,
-    name: handle.replace(/[._]/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()),
-    bio: "Beauty & Lifestyle Creator",
-    profileImageUrl: null,
-    igFollowerCount: Math.floor(Math.random() * 500000) + 10000,
-    igFollowingCount: Math.floor(Math.random() * 2000) + 200,
-    igPostCount: Math.floor(Math.random() * 500) + 50,
-    igEngagementRate: (Math.random() * 5 + 1).toFixed(2),
-    igAvgLikes: Math.floor(Math.random() * 10000) + 500,
-    igAvgComments: Math.floor(Math.random() * 500) + 20,
-    igAvgReelViews: Math.floor(Math.random() * 200000) + 10000,
-    igAvgStoryViews: Math.floor(Math.random() * 50000) + 5000,
-    igMedianReelViews: Math.floor(Math.random() * 150000) + 8000,
-    igCredibilityScore: (Math.random() * 20 + 75).toFixed(2),
-    igAudienceMalePct: (Math.random() * 30 + 10).toFixed(2),
-    igAudienceFemalePct: (100 - parseFloat((Math.random() * 30 + 10).toFixed(2))).toFixed(2),
-    igAudienceTopAgeRange: "18-34",
-    igAudienceTopCities: { "Mumbai": 18, "Delhi": 15, "Bangalore": 12, "Hyderabad": 8, "Pune": 6 },
-    igAudienceTopCountries: { "India": 85, "USA": 5, "UK": 3 },
-    categories: ["beauty", "lifestyle"],
-    tier: null as string | null, // will be calculated
-  };
+  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  if (
+    existing?.metricsLastSyncedAt &&
+    existing.metricsLastSyncedAt > twentyFourHoursAgo &&
+    existing.igFollowerCount
+  ) {
+    // Return cached data indicator — frontend will use what's in the DB
+    return NextResponse.json({
+      found: true,
+      source: "cached",
+      message: "Data synced within last 24 hours. Using cached data.",
+      lastSynced: existing.metricsLastSyncedAt,
+    });
+  }
 
-  // Auto-calculate tier
-  if (mockData.igFollowerCount < 10000) mockData.tier = "nano";
-  else if (mockData.igFollowerCount < 50000) mockData.tier = "micro";
-  else if (mockData.igFollowerCount < 200000) mockData.tier = "mid";
-  else if (mockData.igFollowerCount < 1000000) mockData.tier = "macro";
-  else mockData.tier = "mega";
+  // Try CultureX first
+  const profile = await fetchProfile(cleanHandle);
 
-  // In production, check if CultureX returned data. If not, fall back to Instagram.
-  // Simulate: if CultureX returns found=true, return it. Otherwise, try Instagram.
-  if (mockData.found) {
-    return NextResponse.json(mockData);
+  if (profile && profile.found) {
+    return NextResponse.json(profile);
   }
 
   // ===== INSTAGRAM FALLBACK =====
-  // If CultureX returns no data (404 or empty), fall back to Instagram scraper
-  return instagramFallback(handle);
+  return instagramFallback(cleanHandle);
 }
 
 async function instagramFallback(handle: string) {
   try {
     const profile = await fetchPublicProfile(handle);
 
-    // Calculate tier from follower count
     let tier: string;
     if (profile.followerCount < 10000) tier = "nano";
     else if (profile.followerCount < 50000) tier = "micro";
@@ -76,13 +67,13 @@ async function instagramFallback(handle: string) {
       igFollowerCount: profile.followerCount,
       igFollowingCount: profile.followingCount,
       igPostCount: profile.postCount,
-      // These fields are unavailable from Instagram public scraping
       igEngagementRate: null,
       igAvgLikes: null,
       igAvgComments: null,
       igAvgReelViews: null,
       igAvgStoryViews: null,
       igMedianReelViews: null,
+      igLast8ReelViews: [],
       igCredibilityScore: null,
       igAudienceMalePct: null,
       igAudienceFemalePct: null,
@@ -91,9 +82,14 @@ async function instagramFallback(handle: string) {
       igAudienceTopCountries: null,
       categories: [],
       tier,
+      recentReels: [],
+      lastUpdated: null,
     });
   } catch (error) {
     console.error("Instagram fallback also failed:", error);
-    return NextResponse.json({ found: false, source: "instagram_fallback" }, { status: 404 });
+    return NextResponse.json(
+      { found: false, source: "instagram_fallback" },
+      { status: 404 }
+    );
   }
 }
