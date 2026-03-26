@@ -135,6 +135,14 @@ export async function PUT(
       }
     }
 
+    // Clean empty strings for UUID fields (Postgres rejects "" as invalid UUID)
+    const uuidFields = ["agencyId", "brandId", "managerId"];
+    for (const field of uuidFields) {
+      if (body[field] === "" || body[field] === undefined) {
+        body[field] = null;
+      }
+    }
+
     // Handle dateOfBirth
     if (body.dateOfBirth) {
       body.dateOfBirth = new Date(body.dateOfBirth);
