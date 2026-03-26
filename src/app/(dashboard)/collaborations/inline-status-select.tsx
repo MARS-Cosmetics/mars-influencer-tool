@@ -65,8 +65,16 @@ export function InlineStatusSelect({ collaborationId, currentStatus }: InlineSta
         throw new Error(data.error || "Failed to update status");
       }
 
+      const data = await res.json().catch(() => ({}));
       const label = statusOptions.find((s) => s.value === newStatus)?.label || newStatus;
       toast.success(`Status updated to ${label}`);
+
+      // Show Shopify warnings if order wasn't created
+      if (data.shopifyWarnings && data.shopifyWarnings.length > 0) {
+        toast.warning(`Shopify order not created: ${data.shopifyWarnings.join(". ")}`, {
+          duration: 8000,
+        });
+      }
     } catch (err) {
       setStatus(previousStatus);
       toast.error(err instanceof Error ? err.message : "Failed to update status");

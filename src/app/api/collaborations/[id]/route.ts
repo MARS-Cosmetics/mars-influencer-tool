@@ -189,37 +189,51 @@ export async function PUT(
           },
         });
 
-        if (fullCollab && fullCollab.products.length > 0 && fullCollab.influencer.addressLine1) {
-          const inf = fullCollab.influencer;
-          const orderInput: ShopifyOrderInput = {
-            line_items: fullCollab.products
-              .filter((cp) => cp.product.shopifyVariantId)
-              .map((cp) => ({
-                variant_id: parseInt(cp.product.shopifyVariantId!),
-                quantity: cp.quantity,
-                price: "1.00",
-                title: cp.product.name,
-              })),
-            tags: `influencer,${fullCollab.type},collab-${id}`,
-            note: `Influencer: ${inf.name}${inf.instagramHandle ? ` (@${inf.instagramHandle})` : ""} | Collaboration: ${id}`,
-            shipping_address: {
-              first_name: inf.name.split(" ")[0] || inf.name,
-              last_name: inf.name.split(" ").slice(1).join(" ") || "",
-              address1: inf.addressLine1!,
-              address2: inf.addressLine2 || undefined,
-              city: inf.city || "",
-              province: inf.state || "",
-              zip: inf.pincode || "",
-              country: inf.country || "India",
-              phone: inf.phone || undefined,
-            },
-            financial_status: "paid",
-            send_receipt: false,
-            send_fulfillment_receipt: false,
-          };
+        const shopifyWarnings: string[] = [];
 
-          // Only create order if there are valid line items
-          if (orderInput.line_items.length > 0) {
+        if (!fullCollab) {
+          shopifyWarnings.push("Collaboration not found");
+        } else if (fullCollab.products.length === 0) {
+          shopifyWarnings.push("No products linked to this collaboration");
+        } else if (!fullCollab.influencer.addressLine1) {
+          shopifyWarnings.push("Influencer address is missing");
+        } else {
+          const inf = fullCollab.influencer;
+
+          // Try with shopifyVariantId first, fallback to shopifyProductId for line items
+          const lineItems = fullCollab.products
+            .filter((cp) => cp.product.shopifyVariantId || cp.product.shopifyProductId)
+            .map((cp) => ({
+              variant_id: cp.product.shopifyVariantId ? parseInt(cp.product.shopifyVariantId) : undefined,
+              product_id: !cp.product.shopifyVariantId && cp.product.shopifyProductId ? parseInt(cp.product.shopifyProductId) : undefined,
+              quantity: cp.quantity,
+              price: "1.00",
+              title: cp.product.name,
+            }));
+
+          if (lineItems.length === 0) {
+            shopifyWarnings.push("No products have Shopify IDs. Please sync products from Shopify first, then link synced products to this collaboration.");
+          } else {
+            const orderInput: ShopifyOrderInput = {
+              line_items: lineItems,
+              tags: `influencer,${fullCollab.type},collab-${id}`,
+              note: `Influencer: ${inf.name}${inf.instagramHandle ? ` (@${inf.instagramHandle})` : ""} | Collaboration: ${id}`,
+              shipping_address: {
+                first_name: inf.name.split(" ")[0] || inf.name,
+                last_name: inf.name.split(" ").slice(1).join(" ") || "",
+                address1: inf.addressLine1!,
+                address2: inf.addressLine2 || undefined,
+                city: inf.city || "",
+                province: inf.state || "",
+                zip: inf.pincode || "",
+                country: inf.country || "India",
+                phone: inf.phone || undefined,
+              },
+              financial_status: "paid",
+              send_receipt: false,
+              send_fulfillment_receipt: false,
+            };
+
             const order = await createOrder(orderInput);
             await prisma.collaboration.update({
               where: { id },
@@ -230,6 +244,16 @@ export async function PUT(
               },
             });
           }
+        }
+
+        // Log warnings if order wasn't created
+        if (shopifyWarnings.length > 0) {
+          console.warn(`Shopify order not created for collab ${id}:`, shopifyWarnings);
+          // Include warnings in response so UI can show them
+          return NextResponse.json({
+            ...collaboration,
+            shopifyWarnings
+          });
         }
       } catch (shopifyError) {
         console.error("Shopify order creation failed (non-blocking):", shopifyError);
