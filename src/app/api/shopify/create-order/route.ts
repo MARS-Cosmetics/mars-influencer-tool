@@ -71,9 +71,8 @@ export async function POST(request: NextRequest) {
       };
     });
 
-    // Build tags
-    const typeTags = `influencer,${collaboration.type}`;
-    const tags = `${typeTags},collab:${collaboration.id}`;
+    // Build tags (Shopify doesn't allow colons in tags)
+    const tags = `influencer, ${collaboration.type}, collab-${collaboration.id}`;
 
     // Build note
     const handle = inf.instagramHandle || inf.youtubeHandle || "unknown";
