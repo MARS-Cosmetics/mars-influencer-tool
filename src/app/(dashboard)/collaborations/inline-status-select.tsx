@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
@@ -37,12 +37,19 @@ export function InlineStatusSelect({ collaborationId, currentStatus }: InlineSta
   const [status, setStatus] = useState(currentStatus);
   const [isUpdating, setIsUpdating] = useState(false);
   const router = useRouter();
+  const [, startTransition] = useTransition();
+
+  // Sync with server prop when it changes (after refresh)
+  useEffect(() => {
+    if (!isUpdating) {
+      setStatus(currentStatus);
+    }
+  }, [currentStatus, isUpdating]);
 
   async function handleChange(newStatus: string) {
     if (newStatus === status) return;
 
     setIsUpdating(true);
-    const previousStatus = status;
     setStatus(newStatus); // Optimistic update
 
     try {
@@ -58,9 +65,13 @@ export function InlineStatusSelect({ collaborationId, currentStatus }: InlineSta
 
       const label = statusOptions.find((s) => s.value === newStatus)?.label || newStatus;
       toast.success(`Status updated to ${label}`);
-      router.refresh();
+
+      // Refresh server data in background without resetting local state
+      startTransition(() => {
+        router.refresh();
+      });
     } catch {
-      setStatus(previousStatus); // Rollback
+      setStatus(currentStatus); // Rollback to server value
       toast.error("Failed to update status");
     } finally {
       setIsUpdating(false);
