@@ -38,7 +38,7 @@ export const STATUS_CONFIG: Record<string, StatusConfig> = {
     label: "Confirmed",
     sequence: 40,
     color: "bg-green-100 text-green-700 border-green-300",
-    requirements: ["Products must be linked", "Influencer address required", "Due date required"],
+    requirements: ["Products must be linked", "Influencer address required", "Influencer phone number required", "Due date required"],
     autoActions: ["Create Shopify order (₹1)", "Create payment entries from payment terms"],
   },
   in_progress: {
@@ -156,6 +156,7 @@ export interface CollaborationContext {
   influencerId: string;
   hasProducts: boolean;
   hasAddress: boolean;
+  hasPhone: boolean;
   hasDueDate: boolean;
   hasShopifyOrder: boolean;
   assetCount: number;
@@ -186,6 +187,7 @@ export function validateTransition(
   if (toStatus === "confirmed") {
     if (!context.hasProducts) errors.push("At least one product must be linked");
     if (!context.hasAddress) errors.push("Influencer address is required");
+    if (!context.hasPhone) errors.push("Influencer phone number is required for Shopify order");
     if (!context.hasDueDate) errors.push("Due date is required");
   }
 

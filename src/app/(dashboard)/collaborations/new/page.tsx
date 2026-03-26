@@ -41,6 +41,7 @@ interface InfluencerDetail {
   igFollowerCount?: number;
   igEngagementRate?: number;
   addressLine1?: string;
+  phone?: string;
   agencyId?: string;
   managedBy?: string;
 }
@@ -124,6 +125,7 @@ export default function NewCollaborationPage() {
   const [selectedInfluencer, setSelectedInfluencer] = useState<InfluencerDetail | null>(null);
   const [isLoadingInfluencer, setIsLoadingInfluencer] = useState(false);
   const [addressCheck, setAddressCheck] = useState<"unchecked" | "has_address" | "no_address">("unchecked");
+  const [phoneCheck, setPhoneCheck] = useState<"unchecked" | "has_phone" | "no_phone">("unchecked");
 
   // Agency state
   const [agencyDetail, setAgencyDetail] = useState<AgencyDetail | null>(null);
@@ -289,11 +291,13 @@ export default function NewCollaborationPage() {
           igFollowerCount: data.igFollowerCount,
           igEngagementRate: data.igEngagementRate,
           addressLine1: data.addressLine1,
+          phone: data.phone,
           agencyId: data.agencyId,
           managedBy: data.managedBy,
         };
         setSelectedInfluencer(inf);
         setAddressCheck(data.addressLine1 ? "has_address" : "no_address");
+        setPhoneCheck(data.phone ? "has_phone" : "no_phone");
 
         // Fetch agency if managed by agency
         if (data.managedBy === "agency" && data.agencyId) {
@@ -574,7 +578,7 @@ export default function NewCollaborationPage() {
     }
   }
 
-  const submitDisabled = isSubmitting || addressCheck === "no_address" || hasOutOfStock;
+  const submitDisabled = isSubmitting || addressCheck === "no_address" || phoneCheck === "no_phone" || hasOutOfStock;
 
   const getProductName = (productId: string) => {
     const opt = productOptions.find((o) => o.value === productId);
@@ -722,10 +726,29 @@ export default function NewCollaborationPage() {
                 </div>
               )}
 
-              {addressCheck === "has_address" && selectedInfluencer && (
+              {phoneCheck === "no_phone" && selectedInfluencer && (
+                <div className="mt-2 rounded-lg border border-yellow-300 bg-yellow-50 p-3">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="size-4 text-yellow-600 mt-0.5 shrink-0" />
+                    <div className="space-y-1">
+                      <p className="text-sm text-yellow-800">
+                        This influencer doesn&apos;t have a phone number on file. A phone number is required for Shopify shipping.
+                      </p>
+                      <Link
+                        href={`/influencers/${selectedInfluencer.id}/edit`}
+                        className="text-sm font-medium text-yellow-700 hover:text-yellow-900 underline underline-offset-2"
+                      >
+                        Complete Influencer Profile &rarr;
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {addressCheck === "has_address" && phoneCheck === "has_phone" && selectedInfluencer && (
                 <div className="mt-2 flex items-center gap-1.5 text-sm text-green-600">
                   <CheckCircle2 className="size-4" />
-                  Address verified
+                  Address &amp; phone verified
                 </div>
               )}
             </div>

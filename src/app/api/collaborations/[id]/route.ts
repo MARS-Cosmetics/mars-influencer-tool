@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { Prisma } from "@/generated/prisma";
 import { createOrder, type ShopifyOrderInput } from "@/lib/shopify";
+import { withRetry } from "@/lib/shopify-retry";
 
 export async function GET(
   request: NextRequest,
@@ -220,6 +221,8 @@ export async function PUT(
           shopifyWarnings.push("No products linked to this collaboration");
         } else if (!fullCollab.influencer.addressLine1) {
           shopifyWarnings.push("Influencer address is missing");
+        } else if (!fullCollab.influencer.phone) {
+          shopifyWarnings.push("Influencer phone number is required for shipping");
         } else {
           const inf = fullCollab.influencer;
 
@@ -257,15 +260,31 @@ export async function PUT(
               send_fulfillment_receipt: false,
             };
 
-            const order = await createOrder(orderInput);
-            await prisma.collaboration.update({
-              where: { id },
-              data: {
-                shopifyOrderId: String(order.id),
-                shopifyOrderNumber: order.name,
-                shopifyOrderStatus: order.fulfillment_status || "unfulfilled",
-              },
+            const orderResult = await withRetry(() => createOrder(orderInput), {
+              maxRetries: 3,
+              baseDelayMs: 1000,
             });
+
+            if (orderResult.success && orderResult.result) {
+              const order = orderResult.result;
+              await prisma.collaboration.update({
+                where: { id },
+                data: {
+                  shopifyOrderId: String(order.id),
+                  shopifyOrderNumber: order.name,
+                  shopifyOrderStatus: order.fulfillment_status || "unfulfilled",
+                },
+              });
+              console.log(`[Shopify] Order created after ${orderResult.attempts} attempt(s)`);
+            } else {
+              // All retries failed — mark for background retry
+              await prisma.collaboration.update({
+                where: { id },
+                data: { shopifyOrderStatus: 'pending_retry', shopifyOrderId: null },
+              });
+              console.warn(`[Shopify] Order creation failed after ${orderResult.attempts} attempts. Marked for retry. Error: ${orderResult.error}`);
+              shopifyWarnings.push(`Shopify order will be retried (failed after ${orderResult.attempts} attempts: ${orderResult.error})`);
+            }
           }
         }
 

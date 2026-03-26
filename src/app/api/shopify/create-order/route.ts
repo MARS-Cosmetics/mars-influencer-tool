@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { createOrder, ShopifyOrderInput } from "@/lib/shopify";
+import { withRetry } from "@/lib/shopify-retry";
 
 export async function POST(request: NextRequest) {
   try {
@@ -57,6 +58,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!inf.phone) {
+      return NextResponse.json(
+        { error: "Influencer phone number is required for Shopify shipping" },
+        { status: 400 }
+      );
+    }
+
     // Build line items
     const line_items = collaboration.products.map((cp) => {
       const variantId = cp.product.shopifyVariantId;
@@ -103,7 +111,26 @@ export async function POST(request: NextRequest) {
       send_fulfillment_receipt: false,
     };
 
-    const order = await createOrder(orderInput);
+    const orderResult = await withRetry(() => createOrder(orderInput), {
+      maxRetries: 3,
+      baseDelayMs: 1000,
+    });
+
+    if (!orderResult.success || !orderResult.result) {
+      // All retries failed — mark for background retry
+      await prisma.collaboration.update({
+        where: { id: collaborationId },
+        data: { shopifyOrderStatus: 'pending_retry' },
+      });
+      console.warn(`[Shopify] Order creation failed after ${orderResult.attempts} attempts. Marked for retry. Error: ${orderResult.error}`);
+      return NextResponse.json(
+        { success: false, error: `Order creation failed after ${orderResult.attempts} attempts: ${orderResult.error}`, pendingRetry: true },
+        { status: 502 }
+      );
+    }
+
+    const order = orderResult.result;
+    console.log(`[Shopify] Order created after ${orderResult.attempts} attempt(s)`);
 
     // Update collaboration with order details
     await prisma.collaboration.update({
@@ -126,6 +153,7 @@ export async function POST(request: NextRequest) {
         tags: order.tags,
         createdAt: order.created_at,
       },
+      attempts: orderResult.attempts,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
