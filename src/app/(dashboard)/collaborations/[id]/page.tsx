@@ -345,6 +345,68 @@ export default async function CollaborationDetailPage(props: {
               </CardContent>
             </Card>
 
+            {/* Shopify Order & Tracking */}
+            {(collaboration.shopifyOrderId || collaboration.shopifyTrackingId) && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Truck className="h-4 w-4" />
+                    Shopify Order & Tracking
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {collaboration.shopifyOrderNumber && (
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-500">Order Number</span>
+                      <span className="text-sm font-medium">{collaboration.shopifyOrderNumber}</span>
+                    </div>
+                  )}
+                  {collaboration.shopifyOrderId && (
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-500">Order ID</span>
+                      <span className="text-sm font-mono text-xs">{collaboration.shopifyOrderId}</span>
+                    </div>
+                  )}
+                  {collaboration.shopifyOrderStatus && (
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-500">Order Status</span>
+                      <Badge className={collaboration.shopifyOrderStatus === "cancelled" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}>
+                        {collaboration.shopifyOrderStatus}
+                      </Badge>
+                    </div>
+                  )}
+                  {collaboration.shopifyFulfillmentStatus && (
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-500">Fulfillment</span>
+                      <Badge className={collaboration.shopifyFulfillmentStatus === "fulfilled" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}>
+                        {collaboration.shopifyFulfillmentStatus}
+                      </Badge>
+                    </div>
+                  )}
+                  <Separator />
+                  {collaboration.shopifyTrackingId && (
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-500">Tracking ID</span>
+                      <span className="text-sm font-mono">{collaboration.shopifyTrackingId}</span>
+                    </div>
+                  )}
+                  {collaboration.shopifyTrackingUrl && (
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-500">Tracking Link</span>
+                      <a
+                        href={collaboration.shopifyTrackingUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-blue-600 hover:underline flex items-center gap-1"
+                      >
+                        Track Shipment <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
             {/* Influencer Info */}
             <Card>
               <CardHeader>

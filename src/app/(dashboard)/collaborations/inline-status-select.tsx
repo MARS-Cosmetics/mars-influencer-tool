@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { getValidTransitions, STATUS_CONFIG, REQUIRES_CONFIRMATION } from "@/lib/state-machine";
@@ -141,8 +142,8 @@ export function InlineStatusSelect({
         ))}
       </select>
 
-      {/* Confirmation Modal */}
-      {showConfirm && pendingStatus && (
+      {/* Confirmation Modal - rendered via portal to avoid Card overflow-hidden */}
+      {showConfirm && pendingStatus && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={handleCancelConfirm}>
           <div
             className="bg-white rounded-xl shadow-2xl p-6 max-w-md mx-4 space-y-4"
@@ -177,7 +178,8 @@ export function InlineStatusSelect({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

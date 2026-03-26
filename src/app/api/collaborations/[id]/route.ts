@@ -172,14 +172,18 @@ export async function PUT(
       }
     }
 
-    // Auto-create Shopify order when status changes to "confirmed" and no order exists
+    // Auto-create Shopify order when status reaches "confirmed" or beyond and no order exists
     // Uses database-level atomic check to prevent race conditions / duplicate orders
+    const confirmedOrBeyond = ["confirmed", "in_progress", "content_submitted", "content_approved", "completed"];
+    const preConfirmed = ["draft", "outreach", "negotiation"];
     if (
-      body.status === "confirmed" &&
+      body.status &&
+      confirmedOrBeyond.includes(body.status) &&
       previousCollab &&
-      previousCollab.status !== "confirmed" &&
+      preConfirmed.includes(previousCollab.status) &&
       !previousCollab.shopifyOrderId
     ) {
+      console.log(`[Shopify] Triggering order creation for collab ${id} (${previousCollab.status} → ${body.status})`);
       try {
         // Atomic lock: only proceed if shopifyOrderId is still null
         // This prevents duplicate orders from concurrent requests
