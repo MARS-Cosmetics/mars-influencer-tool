@@ -120,25 +120,21 @@ export function getValidTransitions(currentStatus: string, requiresContentApprov
     validStatuses.push("cancelled");
   }
 
-  // Next status (forward)
-  if (currentIndex < allStatuses.length - 1) {
-    const nextStatus = allStatuses[currentIndex + 1];
+  // Forward movement: allow jumping to ANY future status
+  // Requirements are validated separately in validateTransition()
+  for (let i = currentIndex + 1; i < allStatuses.length; i++) {
+    const futureStatus = allStatuses[i];
 
-    // If content approval is not required, skip content_submitted and content_approved
+    // Skip content_submitted/content_approved if not required
     if (!requiresContentApproval &&
-        (nextStatus.value === "content_submitted" || nextStatus.value === "content_approved")) {
-      for (let i = currentIndex + 1; i < allStatuses.length; i++) {
-        if (allStatuses[i].value !== "content_submitted" && allStatuses[i].value !== "content_approved") {
-          validStatuses.push(allStatuses[i].value);
-          break;
-        }
-      }
-    } else {
-      validStatuses.push(nextStatus.value);
+        (futureStatus.value === "content_submitted" || futureStatus.value === "content_approved")) {
+      continue;
     }
+
+    validStatuses.push(futureStatus.value);
   }
 
-  // Backward movement only allowed BEFORE confirmed
+  // Backward movement only allowed BEFORE confirmed (one step back)
   // After confirmed (order placed), no going back
   if (currentIndex > 0 && currentIndex < confirmedIndex) {
     const prevStatus = allStatuses[currentIndex - 1];
