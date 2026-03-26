@@ -230,7 +230,6 @@ export default async function CollaborationsPage(props: {
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-xs text-[#A6192E] hover:underline"
-                          onClick={(e) => e.stopPropagation()}
                         >
                           @{collab.influencer.instagramHandle}
                         </a>
