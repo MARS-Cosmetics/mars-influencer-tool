@@ -1,7 +1,6 @@
 "use client";
 
-import Image from "next/image";
-
+/* eslint-disable @next/next/no-img-element */
 export function MarsLogo({
   variant = "black",
   className = "h-7",
@@ -13,14 +12,10 @@ export function MarsLogo({
     variant === "white" ? "/logo-mars-white.png" : "/logo-mars-black.png";
 
   return (
-    <Image
+    <img
       src={src}
       alt="MARS Cosmetics"
-      width={280}
-      height={72}
-      className={className}
-      style={{ width: "auto" }}
-      priority
+      className={`${className} w-auto object-contain`}
     />
   );
 }
