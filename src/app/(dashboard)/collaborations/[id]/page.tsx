@@ -292,12 +292,7 @@ export default async function CollaborationDetailPage(props: {
                     value={collaboration.agreedAmount as unknown as number}
                     type="number"
                     label="Agreed Amount"
-                    formatDisplay={(val) => {
-                      if (val === null || val === undefined) return "-";
-                      const num = typeof val === "string" ? parseFloat(val) : Number(val);
-                      if (isNaN(num)) return "-";
-                      return `₹${num.toLocaleString("en-IN")}`;
-                    }}
+                    displayFormat="currency"
                   />
                 </div>
                 <div className="flex justify-between items-center">
@@ -317,7 +312,8 @@ export default async function CollaborationDetailPage(props: {
                     value={collaboration.dueDate ? new Date(collaboration.dueDate).toISOString().split("T")[0] : null}
                     type="date"
                     label="Due Date"
-                    formatDisplay={(val) => val ? formatDate(new Date(String(val))) : "Not set"}
+                    displayFormat="date"
+                    placeholder="Not set"
                   />
                 </div>
                 {collaboration.contentRating && (
@@ -457,7 +453,7 @@ export default async function CollaborationDetailPage(props: {
                   value={collaboration.brief}
                   type="textarea"
                   label="Brief"
-                  formatDisplay={(val) => val ? String(val) : "Click to add brief..."}
+                  placeholder="Click to add brief..."
                 />
               </CardContent>
             </Card>

@@ -11,7 +11,25 @@ interface EditableFieldProps {
   type?: "text" | "number" | "date" | "select" | "textarea";
   options?: { value: string; label: string }[];
   label: string;
-  formatDisplay?: (val: string | number | null) => string;
+  displayFormat?: "currency" | "date" | "text";
+  placeholder?: string;
+}
+
+function formatForDisplay(val: string | number | null, format?: string, placeholder?: string): string {
+  if (val === null || val === undefined || val === "") return placeholder || "-";
+  if (format === "currency") {
+    const num = typeof val === "string" ? parseFloat(val) : Number(val);
+    if (isNaN(num)) return "-";
+    return `₹${num.toLocaleString("en-IN")}`;
+  }
+  if (format === "date") {
+    try {
+      return new Date(String(val)).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+    } catch {
+      return String(val);
+    }
+  }
+  return String(val);
 }
 
 export function EditableField({
@@ -21,16 +39,15 @@ export function EditableField({
   type = "text",
   options,
   label,
-  formatDisplay,
+  displayFormat,
+  placeholder,
 }: EditableFieldProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(String(value ?? ""));
   const [currentValue, setCurrentValue] = useState(value);
   const [isSaving, setIsSaving] = useState(false);
 
-  const displayValue = formatDisplay
-    ? formatDisplay(currentValue)
-    : String(currentValue ?? "-");
+  const displayValue = formatForDisplay(currentValue, displayFormat, placeholder);
 
   async function handleSave() {
     setIsSaving(true);
