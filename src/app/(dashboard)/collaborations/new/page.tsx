@@ -496,11 +496,12 @@ export default function NewCollaborationPage() {
     if (!form.assignedTo) errors.assignedTo = true;
     if (!form.type) errors.type = true;
     if (form.type === "paid" && !form.agreedAmount) errors.agreedAmount = true;
+    if (products.length === 0) errors.products = true;
 
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
       const fieldNames = Object.keys(errors).map(k => {
-        const map: Record<string, string> = { influencerId: "Influencer", brandId: "Brand", assignedTo: "Assigned To", type: "Type", agreedAmount: "Agreed Amount" };
+        const map: Record<string, string> = { influencerId: "Influencer", brandId: "Brand", assignedTo: "Assigned To", type: "Type", agreedAmount: "Agreed Amount", products: "Products (at least 1 required)" };
         return map[k] || k;
       });
       toast.error(`Please fill required fields: ${fieldNames.join(", ")}`);
@@ -936,11 +937,14 @@ export default function NewCollaborationPage() {
         </Card>
 
         {/* Products */}
-        <Card>
+        <Card className={formErrors.products ? "ring-2 ring-red-500" : ""}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Package className="h-5 w-5" />
-              Products
+              Products <span className="text-red-500">*</span>
+              {formErrors.products && (
+                <span className="text-xs font-normal text-red-500 ml-2">At least one product required</span>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
