@@ -34,11 +34,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) return null;
+        console.log("[AUTH] authorize called with email:", credentials?.email);
+        if (!credentials?.email || !credentials?.password) {
+          console.log("[AUTH] missing credentials");
+          return null;
+        }
 
         const email = (credentials.email as string).toLowerCase().trim();
         const domain = email.split("@")[1];
         if (!domain) return null;
+
+        console.log("[AUTH] checking domain:", domain, "and user:", email);
 
         // Run domain check and user lookup in parallel
         const [allowedDomains, user] = await Promise.all([
@@ -58,6 +64,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           }),
         ]);
 
+        console.log("[AUTH] allowedDomains:", allowedDomains, "user found:", !!user, "user active:", user?.isActive);
+
         // Check domain
         if (allowedDomains.length > 0) {
           if (!allowedDomains.includes(domain.toLowerCase())) {
@@ -67,14 +75,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           }
         }
 
-        if (!user || !user.isActive) return null;
+        if (!user || !user.isActive) {
+          console.log("[AUTH] user not found or inactive");
+          return null;
+        }
 
+        console.log("[AUTH] comparing password...");
         const isValid = await compare(
           credentials.password as string,
           user.password
         );
+        console.log("[AUTH] password valid:", isValid);
         if (!isValid) return null;
 
+        console.log("[AUTH] login successful for", email);
         return {
           id: user.id,
           email: user.email,

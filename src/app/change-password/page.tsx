@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -77,16 +77,13 @@ export default function ChangePasswordPage() {
         return;
       }
 
-      // Update session so mustChangePassword is now false
-      await update();
+      toast.success("Password changed successfully! Please sign in with your new password.");
 
-      toast.success("Password changed successfully! Redirecting...");
-
-      // Use window.location for a full page reload so the middleware
-      // picks up the updated JWT cookie with mustChangePassword=false
-      setTimeout(() => {
-        window.location.href = "/";
-      }, 1000);
+      // Sign out and redirect to login — this ensures a completely fresh
+      // JWT token is created on next login with mustChangePassword=false
+      setTimeout(async () => {
+        await signOut({ redirectTo: "/login" });
+      }, 1500);
     } catch {
       setError("An unexpected error occurred");
       setLoading(false);
