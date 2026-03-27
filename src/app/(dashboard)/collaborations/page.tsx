@@ -2,6 +2,8 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db";
 import { Prisma } from "@/generated/prisma";
+import { auth } from "@/lib/auth";
+import { getVisibleUserIds, getDueDateStatus, dueDateStyles, dueDateBadgeStyles } from "@/lib/rbac";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -76,7 +78,22 @@ export default async function CollaborationsPage(props: {
   const typeFilter = searchParams.type || "";
   const statusFilter = searchParams.status || "";
 
+  // RBAC: filter collaborations by user visibility
+  const session = await auth();
+  const userId = session?.user?.id;
+  const userRole = (session?.user as { role?: string })?.role || "user";
+
   const where: Prisma.CollaborationWhereInput = {};
+
+  // Apply RBAC filtering
+  const visibleUserIds = userId
+    ? await getVisibleUserIds(userId, userRole)
+    : [];
+
+  if (visibleUserIds !== null) {
+    // Not admin — filter by assignee
+    where.assignedTo = { in: visibleUserIds };
+  }
 
   if (search) {
     where.influencer = {
@@ -227,8 +244,12 @@ export default async function CollaborationsPage(props: {
                   </TableCell>
                 </TableRow>
               ) : (
-                collaborations.map((collab) => (
-                  <TableRow key={collab.id}>
+                collaborations.map((collab) => {
+                  const dueDateStatus = collab.status !== "completed" && collab.status !== "cancelled"
+                    ? getDueDateStatus(collab.dueDate)
+                    : "normal";
+                  return (
+                  <TableRow key={collab.id} className={dueDateStyles[dueDateStatus]}>
                     <TableCell>
                       <div className="flex flex-col gap-0.5">
                         <Link
@@ -307,9 +328,20 @@ export default async function CollaborationsPage(props: {
                       )}
                     </TableCell>
                     <TableCell>{collab.assignee.name}</TableCell>
-                    <TableCell>{formatDate(collab.dueDate)}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1.5">
+                        <span>{formatDate(collab.dueDate)}</span>
+                        {dueDateStatus === "overdue" && (
+                          <Badge className="bg-red-100 text-red-800 text-[10px] px-1.5 py-0">Overdue</Badge>
+                        )}
+                        {dueDateStatus === "due_soon" && (
+                          <Badge className="bg-amber-100 text-amber-800 text-[10px] px-1.5 py-0">Due Soon</Badge>
+                        )}
+                      </div>
+                    </TableCell>
                   </TableRow>
-                ))
+                  );
+                })
               )}
             </TableBody>
           </Table>

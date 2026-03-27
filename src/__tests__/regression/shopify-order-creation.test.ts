@@ -364,7 +364,7 @@ describe('Shopify Order Address Validation (regression)', () => {
     expect(orderInput.shipping_address.country).toBe('India');
   });
 
-  it('should handle missing phone number gracefully', async () => {
+  it('should reject order when phone number is missing', async () => {
     prismaMock.collaboration.findUnique.mockResolvedValue(
       makeCollaboration({
         influencer: {
@@ -378,7 +378,7 @@ describe('Shopify Order Address Validation (regression)', () => {
           state: 'Maharashtra',
           pincode: '400001',
           country: 'India',
-          phone: null, // No phone
+          phone: null, // No phone — should be rejected
         },
       })
     );
@@ -386,12 +386,9 @@ describe('Shopify Order Address Validation (regression)', () => {
     const res = await POST(makeRequest({ collaborationId: 'collab-uuid-123' }) as any);
     const body = await res.json();
 
-    expect(res.status).toBe(200);
-    expect(body.success).toBe(true);
-    expect(mockCreateOrder).toHaveBeenCalledTimes(1);
-
-    const orderInput = mockCreateOrder.mock.calls[0][0];
-    expect(orderInput.shipping_address.phone).toBeUndefined();
+    expect(res.status).toBe(400);
+    expect(body.error).toContain('phone');
+    expect(mockCreateOrder).not.toHaveBeenCalled();
   });
 });
 
