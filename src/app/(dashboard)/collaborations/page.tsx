@@ -7,7 +7,6 @@ import { getVisibleUserIds, getDueDateStatus, dueDateStyles, dueDateBadgeStyles 
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -16,9 +15,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Search, Handshake, ExternalLink, Truck } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Plus, Handshake, Truck } from "lucide-react";
 import { InlineStatusSelect } from "./inline-status-select";
+import { CollaborationFilters } from "./collaboration-filters";
 
 function formatCurrency(amount: unknown): string {
   if (amount === null || amount === undefined) return "-";
@@ -71,12 +71,14 @@ const statusLabels: Record<string, string> = {
 };
 
 export default async function CollaborationsPage(props: {
-  searchParams: Promise<{ search?: string; type?: string; status?: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const searchParams = await props.searchParams;
-  const search = searchParams.search || "";
-  const typeFilter = searchParams.type || "";
-  const statusFilter = searchParams.status || "";
+  const search = typeof searchParams.search === "string" ? searchParams.search : "";
+  const typeFilter = typeof searchParams.type === "string" ? searchParams.type : "";
+  const statusFilter = typeof searchParams.status === "string" ? searchParams.status : "";
+  const brandFilter = typeof searchParams.brand === "string" ? searchParams.brand : "";
+  const campaignFilter = typeof searchParams.campaign === "string" ? searchParams.campaign : "";
 
   // RBAC: filter collaborations by user visibility
   const session = await auth();
@@ -91,7 +93,6 @@ export default async function CollaborationsPage(props: {
     : [];
 
   if (visibleUserIds !== null) {
-    // Not admin — filter by assignee
     where.assignedTo = { in: visibleUserIds };
   }
 
@@ -109,37 +110,56 @@ export default async function CollaborationsPage(props: {
     where.status = statusFilter as Prisma.CollaborationWhereInput["status"];
   }
 
-  const collaborations = await prisma.collaboration.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-    take: 50,
-    select: {
-      id: true,
-      status: true,
-      type: true,
-      agreedAmount: true,
-      dueDate: true,
-      requiresContentApproval: true,
-      influencer: {
-        select: { id: true, name: true, instagramHandle: true },
+  if (brandFilter) {
+    where.brandId = brandFilter;
+  }
+
+  if (campaignFilter) {
+    where.campaignId = campaignFilter;
+  }
+
+  // Fetch collaborations + brands/campaigns for filter dropdowns in parallel
+  const [collaborations, brands, campaigns] = await Promise.all([
+    prisma.collaboration.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: 50,
+      select: {
+        id: true,
+        status: true,
+        type: true,
+        agreedAmount: true,
+        dueDate: true,
+        requiresContentApproval: true,
+        influencer: {
+          select: { id: true, name: true, instagramHandle: true },
+        },
+        brand: {
+          select: { id: true, name: true },
+        },
+        assignee: {
+          select: { id: true, name: true },
+        },
+        shopifyOrderId: true,
+        shopifyOrderNumber: true,
+        shopifyOrderStatus: true,
+        shopifyTrackingId: true,
+        shopifyTrackingUrl: true,
+        shopifyFulfillmentStatus: true,
+        assets: {
+          select: { views: true },
+        },
       },
-      brand: {
-        select: { id: true, name: true },
-      },
-      assignee: {
-        select: { id: true, name: true },
-      },
-      shopifyOrderId: true,
-      shopifyOrderNumber: true,
-      shopifyOrderStatus: true,
-      shopifyTrackingId: true,
-      shopifyTrackingUrl: true,
-      shopifyFulfillmentStatus: true,
-      assets: {
-        select: { views: true },
-      },
-    },
-  });
+    }),
+    prisma.brand.findMany({
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.campaign.findMany({
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -156,68 +176,15 @@ export default async function CollaborationsPage(props: {
         </Link>
       </div>
 
-      <Card>
-        <CardHeader className="pb-4">
-          <CardTitle className="text-base font-medium">Filters</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form className="flex flex-wrap items-end gap-4">
-            <div className="flex-1 min-w-[200px]">
-              <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                Search by influencer
-              </label>
-              <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                <Input
-                  name="search"
-                  placeholder="Search influencer name..."
-                  defaultValue={search}
-                  className="pl-9"
-                />
-              </div>
-            </div>
-            <div className="min-w-[150px]">
-              <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                Type
-              </label>
-              <select
-                name="type"
-                defaultValue={typeFilter}
-                className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-              >
-                <option value="">All Types</option>
-                <option value="paid">Paid</option>
-                <option value="barter">Barter</option>
-              </select>
-            </div>
-            <div className="min-w-[180px]">
-              <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                Status
-              </label>
-              <select
-                name="status"
-                defaultValue={statusFilter}
-                className="flex h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-              >
-                <option value="">All Statuses</option>
-                <option value="draft">Draft</option>
-                <option value="outreach">Outreach</option>
-                <option value="negotiation">Negotiation</option>
-                <option value="confirmed">Confirmed</option>
-                <option value="in_progress">In Progress</option>
-                <option value="content_submitted">Content Submitted</option>
-                <option value="content_approved">Content Approved</option>
-                <option value="completed">Completed</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-            </div>
-            <Button type="submit" variant="secondary">
-              <Search className="mr-2 h-4 w-4" />
-              Filter
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+      <CollaborationFilters
+        currentSearch={search}
+        currentType={typeFilter}
+        currentStatus={statusFilter}
+        currentBrand={brandFilter}
+        currentCampaign={campaignFilter}
+        brands={brands}
+        campaigns={campaigns}
+      />
 
       <Card>
         <CardContent className="p-0">

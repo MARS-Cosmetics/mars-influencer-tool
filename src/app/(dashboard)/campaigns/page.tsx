@@ -6,7 +6,6 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -15,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { CampaignFilters } from "./campaign-filters";
 
 const statusColors: Record<CampaignStatus, string> = {
   draft: "bg-gray-100 text-gray-700",
@@ -41,9 +41,12 @@ function formatDate(date: Date | null | undefined): string {
 export default async function CampaignsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; status?: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  const { search, status } = await searchParams;
+  const params = await searchParams;
+  const search = typeof params.search === "string" ? params.search : "";
+  const status = typeof params.status === "string" ? params.status : "";
+  const brandFilter = typeof params.brand === "string" ? params.brand : "";
 
   const where: Record<string, unknown> = {};
 
@@ -55,11 +58,21 @@ export default async function CampaignsPage({
     where.status = status;
   }
 
-  const campaigns = await prisma.campaign.findMany({
-    where,
-    include: { brand: true },
-    orderBy: { createdAt: "desc" },
-  });
+  if (brandFilter) {
+    where.brandId = brandFilter;
+  }
+
+  const [campaigns, brands] = await Promise.all([
+    prisma.campaign.findMany({
+      where,
+      include: { brand: true },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.brand.findMany({
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -73,31 +86,13 @@ export default async function CampaignsPage({
         </Link>
       </div>
 
-      <div className="flex items-center gap-4">
-        <form className="flex items-center gap-4 flex-1">
-          <Input
-            name="search"
-            placeholder="Search campaigns..."
-            defaultValue={search || ""}
-            className="max-w-sm"
-          />
-          <select
-            name="status"
-            defaultValue={status || ""}
-            className="h-8 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm"
-          >
-            <option value="">All Statuses</option>
-            {Object.values(CampaignStatus).map((s) => (
-              <option key={s} value={s}>
-                {s.charAt(0).toUpperCase() + s.slice(1)}
-              </option>
-            ))}
-          </select>
-          <Button type="submit" variant="outline">
-            Filter
-          </Button>
-        </form>
-      </div>
+      <CampaignFilters
+        currentSearch={search}
+        currentStatus={status}
+        currentBrand={brandFilter}
+        brands={brands}
+        campaignStatuses={Object.values(CampaignStatus)}
+      />
 
       <div className="rounded-lg border bg-white">
         <Table>

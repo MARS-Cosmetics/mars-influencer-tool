@@ -202,39 +202,47 @@ export default function AgenciesPage() {
         {activeFilters.map((key) => (
           <div key={key} className="flex items-center gap-1">
             {key === "state" && (
-              <select
-                value={stateFilter}
-                onChange={(e) => handleStateChange(e.target.value)}
-                className={selectClass}
-              >
-                <option value="">All States</option>
-                {INDIAN_STATES.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
+              <>
+                <input
+                  list="agency-state-options"
+                  value={stateFilter}
+                  onChange={(e) => handleStateChange(e.target.value)}
+                  placeholder="Type or select state..."
+                  className={selectClass + " w-[180px]"}
+                />
+                <datalist id="agency-state-options">
+                  {INDIAN_STATES.map((s) => (
+                    <option key={s} value={s} />
+                  ))}
+                </datalist>
+              </>
             )}
 
             {key === "city" && (
-              <select
-                value={cityFilter}
-                onChange={(e) => setCityFilter(e.target.value)}
-                disabled={!stateFilter || !activeFilters.includes("state")}
-                className={
-                  selectClass +
-                  (!stateFilter || !activeFilters.includes("state")
-                    ? " opacity-50 cursor-not-allowed"
-                    : "")
-                }
-              >
-                <option value="">
-                  {stateFilter && activeFilters.includes("state")
-                    ? "All Cities"
-                    : "Add State filter first"}
-                </option>
-                {cities.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
+              <>
+                <input
+                  list="agency-city-options"
+                  value={cityFilter}
+                  onChange={(e) => setCityFilter(e.target.value)}
+                  disabled={!stateFilter || !activeFilters.includes("state")}
+                  placeholder={
+                    stateFilter && activeFilters.includes("state")
+                      ? "Type or select city..."
+                      : "Add State first"
+                  }
+                  className={
+                    selectClass + " w-[180px]" +
+                    (!stateFilter || !activeFilters.includes("state")
+                      ? " opacity-50 cursor-not-allowed"
+                      : "")
+                  }
+                />
+                <datalist id="agency-city-options">
+                  {cities.map((c) => (
+                    <option key={c} value={c} />
+                  ))}
+                </datalist>
+              </>
             )}
 
             {key === "status" && (

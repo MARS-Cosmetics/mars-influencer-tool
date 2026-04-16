@@ -4,55 +4,35 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useState, useEffect, useRef, useTransition } from "react";
 import { Input } from "@/components/ui/input";
 import { Search, Plus, X } from "lucide-react";
-import { INDIAN_STATES } from "@/lib/constants";
-import { getCitiesForState } from "@/lib/indian-cities";
 
-type FilterKey = "tier" | "status" | "state" | "city";
+type FilterKey = "type" | "status" | "brand" | "campaign";
 
 const FILTER_OPTIONS: { key: FilterKey; label: string }[] = [
-  { key: "tier", label: "Tier" },
+  { key: "type", label: "Type" },
   { key: "status", label: "Status" },
-  { key: "state", label: "State" },
-  { key: "city", label: "City" },
-];
-
-const tiers = [
-  { value: "", label: "All Tiers" },
-  { value: "nano", label: "Nano" },
-  { value: "micro", label: "Micro" },
-  { value: "mid", label: "Mid" },
-  { value: "macro", label: "Macro" },
-  { value: "mega", label: "Mega" },
-];
-
-const statuses = [
-  { value: "", label: "All Statuses" },
-  { value: "discovered", label: "Discovered" },
-  { value: "contacted", label: "Contacted" },
-  { value: "form_submitted", label: "Form Submitted" },
-  { value: "demographics_verified", label: "Demographics Verified" },
-  { value: "onboarded", label: "Onboarded" },
-  { value: "active", label: "Active" },
-  { value: "inactive", label: "Inactive" },
-  { value: "blacklisted", label: "Blacklisted" },
-  { value: "do_not_contact", label: "Do Not Contact" },
+  { key: "brand", label: "Brand" },
+  { key: "campaign", label: "Campaign" },
 ];
 
 const selectClass =
   "h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
-export function InfluencerFilters({
+export function CollaborationFilters({
   currentSearch,
-  currentTier,
+  currentType,
   currentStatus,
-  currentState,
-  currentCity,
+  currentBrand,
+  currentCampaign,
+  brands,
+  campaigns,
 }: {
   currentSearch: string;
-  currentTier: string;
+  currentType: string;
   currentStatus: string;
-  currentState: string;
-  currentCity: string;
+  currentBrand: string;
+  currentCampaign: string;
+  brands: { id: string; name: string }[];
+  campaigns: { id: string; name: string }[];
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -60,13 +40,12 @@ export function InfluencerFilters({
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Auto-show filters that have values from URL
   const [activeFilters, setActiveFilters] = useState<FilterKey[]>(() => {
     const initial: FilterKey[] = [];
-    if (currentTier) initial.push("tier");
+    if (currentType) initial.push("type");
     if (currentStatus) initial.push("status");
-    if (currentState) initial.push("state");
-    if (currentCity) initial.push("city");
+    if (currentBrand) initial.push("brand");
+    if (currentCampaign) initial.push("campaign");
     return initial;
   });
 
@@ -78,13 +57,12 @@ export function InfluencerFilters({
         else params.delete(key);
       }
       startTransition(() => {
-        router.push(`/influencers?${params.toString()}`);
+        router.push(`/collaborations?${params.toString()}`);
       });
     },
     [router, searchParams, startTransition]
   );
 
-  // Close menu on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
@@ -101,18 +79,11 @@ export function InfluencerFilters({
   };
 
   const removeFilter = (key: FilterKey) => {
-    setActiveFilters((prev) => {
-      let next = prev.filter((k) => k !== key);
-      if (key === "state") next = next.filter((k) => k !== "city");
-      return next;
-    });
-    const clear: Record<string, string> = { [key]: "" };
-    if (key === "state") clear.city = "";
-    updateParams(clear);
+    setActiveFilters((prev) => prev.filter((k) => k !== key));
+    updateParams({ [key]: "" });
   };
 
   const remainingFilters = FILTER_OPTIONS.filter((f) => !activeFilters.includes(f.key));
-  const cities = currentState ? getCitiesForState(currentState) : [];
 
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -120,7 +91,7 @@ export function InfluencerFilters({
       <div className="relative flex-1 min-w-[200px] max-w-sm">
         <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          placeholder="Search by name or handle..."
+          placeholder="Search by influencer name..."
           defaultValue={currentSearch}
           onChange={(e) => updateParams({ search: (e.target as HTMLInputElement).value })}
           className="pl-8"
@@ -130,15 +101,15 @@ export function InfluencerFilters({
       {/* Active filters */}
       {activeFilters.map((key) => (
         <div key={key} className="flex items-center gap-1">
-          {key === "tier" && (
+          {key === "type" && (
             <select
-              defaultValue={currentTier}
-              onChange={(e) => updateParams({ tier: e.target.value })}
+              defaultValue={currentType}
+              onChange={(e) => updateParams({ type: e.target.value })}
               className={selectClass}
             >
-              {tiers.map((t) => (
-                <option key={t.value} value={t.value}>{t.label}</option>
-              ))}
+              <option value="">All Types</option>
+              <option value="paid">Paid</option>
+              <option value="barter">Barter</option>
             </select>
           )}
 
@@ -148,48 +119,43 @@ export function InfluencerFilters({
               onChange={(e) => updateParams({ status: e.target.value })}
               className={selectClass}
             >
-              {statuses.map((s) => (
-                <option key={s.value} value={s.value}>{s.label}</option>
+              <option value="">All Statuses</option>
+              <option value="draft">Draft</option>
+              <option value="outreach">Outreach</option>
+              <option value="negotiation">Negotiation</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="in_progress">In Progress</option>
+              <option value="content_submitted">Content Submitted</option>
+              <option value="content_approved">Content Approved</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          )}
+
+          {key === "brand" && (
+            <select
+              defaultValue={currentBrand}
+              onChange={(e) => updateParams({ brand: e.target.value })}
+              className={selectClass}
+            >
+              <option value="">All Brands</option>
+              {brands.map((b) => (
+                <option key={b.id} value={b.id}>{b.name}</option>
               ))}
             </select>
           )}
 
-          {key === "state" && (
-            <>
-              <input
-                list="influencer-state-options"
-                defaultValue={currentState}
-                onChange={(e) => updateParams({ state: e.target.value, city: "" })}
-                placeholder="Type or select state..."
-                className={selectClass + " w-[180px]"}
-              />
-              <datalist id="influencer-state-options">
-                {INDIAN_STATES.map((s) => (
-                  <option key={s} value={s} />
-                ))}
-              </datalist>
-            </>
-          )}
-
-          {key === "city" && (
-            <>
-              <input
-                list="influencer-city-options"
-                defaultValue={currentCity}
-                onChange={(e) => updateParams({ city: e.target.value })}
-                placeholder={currentState && activeFilters.includes("state") ? "Type or select city..." : "Add State first"}
-                disabled={!currentState || !activeFilters.includes("state")}
-                className={
-                  selectClass + " w-[180px]" +
-                  (!currentState || !activeFilters.includes("state") ? " opacity-50 cursor-not-allowed" : "")
-                }
-              />
-              <datalist id="influencer-city-options">
-                {cities.map((c) => (
-                  <option key={c} value={c} />
-                ))}
-              </datalist>
-            </>
+          {key === "campaign" && (
+            <select
+              defaultValue={currentCampaign}
+              onChange={(e) => updateParams({ campaign: e.target.value })}
+              className={selectClass}
+            >
+              <option value="">All Campaigns</option>
+              {campaigns.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
           )}
 
           <button

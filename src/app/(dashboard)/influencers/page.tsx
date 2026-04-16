@@ -52,6 +52,8 @@ export default async function InfluencersPage({
   const search = typeof params.search === "string" ? params.search : "";
   const tier = typeof params.tier === "string" ? params.tier : "";
   const status = typeof params.status === "string" ? params.status : "";
+  const state = typeof params.state === "string" ? params.state : "";
+  const city = typeof params.city === "string" ? params.city : "";
 
   const where: Prisma.InfluencerWhereInput = {};
 
@@ -68,6 +70,14 @@ export default async function InfluencersPage({
 
   if (status) {
     where.status = status as InfluencerStatus;
+  }
+
+  if (state) {
+    where.state = { equals: state, mode: "insensitive" };
+  }
+
+  if (city) {
+    where.city = { equals: city, mode: "insensitive" };
   }
 
   const [influencers, total] = await Promise.all([
@@ -111,6 +121,8 @@ export default async function InfluencersPage({
         currentSearch={search}
         currentTier={tier}
         currentStatus={status}
+        currentState={state}
+        currentCity={city}
       />
 
       <div className="rounded-lg border bg-white">
