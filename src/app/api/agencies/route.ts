@@ -4,12 +4,68 @@ import { prisma } from "@/lib/db";
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
+    const distinct = searchParams.get("distinct");
+
+    // Handle distinct value queries for filter dropdowns
+    if (distinct === "cities") {
+      const agencies = await prisma.agency.findMany({
+        where: { city: { not: null } },
+        select: { city: true },
+        distinct: ["city"],
+        orderBy: { city: "asc" },
+      });
+      const cities = agencies
+        .map((a) => a.city)
+        .filter((c): c is string => c !== null && c.trim() !== "");
+      return NextResponse.json(cities);
+    }
+
+    if (distinct === "states") {
+      const agencies = await prisma.agency.findMany({
+        where: { state: { not: null } },
+        select: { state: true },
+        distinct: ["state"],
+        orderBy: { state: "asc" },
+      });
+      const states = agencies
+        .map((a) => a.state)
+        .filter((s): s is string => s !== null && s.trim() !== "");
+      return NextResponse.json(states);
+    }
+
+    // Standard agency list query with filters
     const search = searchParams.get("search") || "";
+    const city = searchParams.get("city") || "";
+    const state = searchParams.get("state") || "";
+    const status = searchParams.get("status") || "";
+    const pincode = searchParams.get("pincode") || "";
 
     const where: Record<string, unknown> = {};
 
     if (search) {
-      where.name = { contains: search, mode: "insensitive" };
+      where.OR = [
+        { name: { contains: search, mode: "insensitive" } },
+        { contactPerson: { contains: search, mode: "insensitive" } },
+        { email: { contains: search, mode: "insensitive" } },
+      ];
+    }
+
+    if (city) {
+      where.city = { equals: city, mode: "insensitive" };
+    }
+
+    if (state) {
+      where.state = { equals: state, mode: "insensitive" };
+    }
+
+    if (status === "active") {
+      where.isActive = true;
+    } else if (status === "inactive") {
+      where.isActive = false;
+    }
+
+    if (pincode) {
+      where.pincode = { startsWith: pincode };
     }
 
     const agencies = await prisma.agency.findMany({
