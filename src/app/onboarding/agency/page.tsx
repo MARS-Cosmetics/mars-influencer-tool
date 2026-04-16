@@ -26,6 +26,8 @@ import {
   ANNUAL_TURNOVER_RANGES,
   BANK_ACCOUNT_TYPES,
 } from "@/lib/constants";
+import { getCitiesForState } from "@/lib/indian-cities";
+import { SearchableSelect } from "@/components/searchable-select";
 
 const selectClass =
   "flex h-9 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
@@ -487,38 +489,44 @@ export default function AgencyOnboardingPage() {
                 />
               </div>
 
-              <div data-field="city">
-                <Label htmlFor="city">
-                  City <RequiredMark />
-                </Label>
-                <Input
-                  id="city"
-                  value={formData.city}
-                  onChange={(e) => updateField("city", e.target.value)}
-                  placeholder="City"
-                />
-                {errors.city && (
-                  <p className="text-red-600 text-xs mt-1">{errors.city}</p>
-                )}
-              </div>
-
               <div data-field="state">
                 <Label htmlFor="state">
                   State <RequiredMark />
                 </Label>
-                <select
-                  id="state"
-                  className={selectClass}
+                <SearchableSelect
+                  options={INDIAN_STATES.map((s) => ({ value: s, label: s }))}
                   value={formData.state}
-                  onChange={(e) => updateField("state", e.target.value)}
-                >
-                  <option value="">Select state</option>
-                  {INDIAN_STATES.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
+                  onChange={(v) => {
+                    setFormData((prev) => ({ ...prev, state: v, city: "" }));
+                    if (errors.state) {
+                      setErrors((prev) => { const next = { ...prev }; delete next.state; return next; });
+                    }
+                  }}
+                  placeholder="Select State..."
+                  searchPlaceholder="Search state..."
+                  emptyMessage="No state found."
+                />
                 {errors.state && (
                   <p className="text-red-600 text-xs mt-1">{errors.state}</p>
+                )}
+              </div>
+
+              <div data-field="city">
+                <Label htmlFor="city">
+                  City <RequiredMark />
+                </Label>
+                <SearchableSelect
+                  options={getCitiesForState(formData.state).map((c) => ({ value: c, label: c }))}
+                  value={formData.city}
+                  onChange={(v) => {
+                    updateField("city", v);
+                  }}
+                  placeholder={formData.state ? "Select City..." : "Select state first"}
+                  searchPlaceholder="Search city..."
+                  emptyMessage={formData.state ? "City not in list." : "Please select a state first."}
+                />
+                {errors.city && (
+                  <p className="text-red-600 text-xs mt-1">{errors.city}</p>
                 )}
               </div>
 

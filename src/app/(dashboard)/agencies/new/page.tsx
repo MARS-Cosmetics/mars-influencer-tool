@@ -11,6 +11,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { INDIAN_STATES, BUSINESS_TYPES, ANNUAL_TURNOVER_RANGES, BANK_ACCOUNT_TYPES } from "@/lib/constants";
+import { getCitiesForState } from "@/lib/indian-cities";
+import { SearchableSelect } from "@/components/searchable-select";
 import {
   validatePhone,
   validateEmail,
@@ -306,17 +308,28 @@ export default function NewAgencyPage() {
             </div>
             <div className="grid gap-4 md:grid-cols-3">
               <div className="space-y-2">
-                <Label htmlFor="city">City</Label>
-                <Input id="city" name="city" value={form.city} onChange={handleChange} placeholder="City" />
+                <Label htmlFor="state">State</Label>
+                <SearchableSelect
+                  options={INDIAN_STATES.map((s) => ({ value: s, label: s }))}
+                  value={form.state}
+                  onChange={(v) => {
+                    setForm((prev) => ({ ...prev, state: v, city: "" }));
+                  }}
+                  placeholder="Select State..."
+                  searchPlaceholder="Search state..."
+                  emptyMessage="No state found."
+                />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="state">State</Label>
-                <select id="state" name="state" value={form.state} onChange={handleChange} className={selectClass}>
-                  <option value="">Select State</option>
-                  {INDIAN_STATES.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
+                <Label htmlFor="city">City</Label>
+                <SearchableSelect
+                  options={getCitiesForState(form.state).map((c) => ({ value: c, label: c }))}
+                  value={form.city}
+                  onChange={(v) => setForm((prev) => ({ ...prev, city: v }))}
+                  placeholder={form.state ? "Select City..." : "Select state first"}
+                  searchPlaceholder="Search city..."
+                  emptyMessage={form.state ? "City not in list." : "Please select a state first."}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="pincode">Pincode</Label>
