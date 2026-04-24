@@ -3,8 +3,6 @@
 # ==============================================================================
 # Env files (contain DB URLs, API keys, tokens)
 .env
-.env.*
-!.env.example          # allow the template so teammates know what to fill in
 
 # Any loose credential / key files
 *.pem
