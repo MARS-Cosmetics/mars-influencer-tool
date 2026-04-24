@@ -100,8 +100,73 @@ export default function NewInfluencerPage() {
   });
 
   const [agencies, setAgencies] = useState<SearchableSelectOption[]>([]);
-  const [dataSource, setDataSource] = useState<"culturex" | "instagram_fallback" | null>(null);
+  const [dataSource, setDataSource] = useState<"creatorx" | "culturex" | "instagram_fallback" | null>(null);
   const [gstVerification, setGstVerification] = useState<{ status: "idle" | "loading" | "success" | "error"; message: string }>({ status: "idle", message: "" });
+  // Track the discovery bookmark (if any) that seeded this form — so we can
+  // clean it up from the Discovered tab after successful influencer creation.
+  const [sourceBookmarkId, setSourceBookmarkId] = useState<string | null>(null);
+  const [prefillSource, setPrefillSource] = useState<string | null>(null);
+
+  // Prefill from a Discovery bookmark — triggered when the page is opened
+  // via /influencers/new?bookmarkId=<uuid> from the Discovered tab.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const bookmarkId = params.get("bookmarkId");
+    if (!bookmarkId) return;
+
+    fetch(`/api/discovery/bookmark/${bookmarkId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b) => {
+        if (!b) {
+          toast.error("Bookmark not found or already converted");
+          return;
+        }
+
+        // Map bookmark → form fields. Snapshot shape is our CreatorResult.
+        const snap = (b.profileSnapshot ?? {}) as {
+          fullname?: string;
+          followers?: number;
+          engagementRate?: number;
+          picture?: string;
+          isVerified?: boolean;
+        };
+
+        setForm((prev) => {
+          const updates: Record<string, string> = {
+            name: snap.fullname || b.username || prev.name,
+            source: "discovery",
+            status: "discovered",
+          };
+
+          // Handle goes into the right platform slot
+          const handle = b.username ?? "";
+          if (b.platform === "instagram") updates.instagramHandle = handle;
+          if (b.platform === "youtube") updates.youtubeHandle = handle;
+          if (b.platform === "tiktok") updates.tiktokHandle = handle;
+
+          // Instagram-only stats we can carry over
+          if (b.platform === "instagram") {
+            if (typeof snap.followers === "number") {
+              updates.igFollowerCount = String(snap.followers);
+            }
+            if (typeof snap.engagementRate === "number") {
+              // snapshot stores as decimal (0.05); form expects percent (5)
+              updates.igEngagementRate = (snap.engagementRate * 100).toFixed(2);
+            }
+          }
+
+          return { ...prev, ...updates };
+        });
+
+        setSourceBookmarkId(bookmarkId);
+        setPrefillSource(
+          `${snap.fullname ?? b.username} (${b.platform}) from the Discovered list`,
+        );
+      })
+      .catch(() => {
+        toast.error("Failed to load bookmark for prefill");
+      });
+  }, []);
 
   // Fetch agencies
   useEffect(() => {
@@ -193,7 +258,9 @@ export default function NewInfluencerPage() {
         bio: prev.bio || data.bio || "",
       }));
       if (data.source === "instagram_fallback") {
-        toast.info("Profile fetched from Instagram (CultureX not available)");
+        toast.info("Profile fetched from Instagram (analytics source not available)");
+      } else if (data.source === "creatorx") {
+        toast.success("Profile data fetched from CreatorX");
       } else {
         toast.success("Profile data fetched from CultureX");
       }
@@ -260,6 +327,17 @@ export default function NewInfluencerPage() {
         throw new Error(err.error || "Failed to create influencer");
       }
 
+      // If this influencer was seeded from a Discovery bookmark, remove
+      // the bookmark so it doesn't show up in the Discovered tab anymore.
+      // Fire-and-forget: failure here shouldn't block the navigation.
+      if (sourceBookmarkId) {
+        fetch(`/api/discovery/bookmark/${sourceBookmarkId}`, {
+          method: "DELETE",
+        }).catch(() => {
+          /* non-blocking */
+        });
+      }
+
       toast.success("Influencer created successfully");
       router.push("/influencers");
     } catch (error) {
@@ -291,6 +369,19 @@ export default function NewInfluencerPage() {
           </p>
         </div>
       </div>
+
+      {prefillSource && (
+        <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+          <Info className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <div className="font-medium">Prefilled from a Discovery bookmark</div>
+            <div className="text-blue-800">
+              {prefillSource}. Review and complete the remaining fields — the
+              bookmark will be removed from the Discovered tab once you save.
+            </div>
+          </div>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Basic Profile */}
@@ -457,6 +548,12 @@ export default function NewInfluencerPage() {
                 <div className="mb-4 flex items-start gap-2 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800 dark:border-green-900 dark:bg-green-950/50 dark:text-green-200">
                   <Info className="size-4 mt-0.5 shrink-0" />
                   <span>Full profile data from CultureX</span>
+                </div>
+              )}
+              {dataSource === "creatorx" && (
+                <div className="mb-4 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-200">
+                  <Info className="size-4 mt-0.5 shrink-0" />
+                  <span>Profile data from CreatorX. Per-post reel stats (avg likes/comments/views) aren&apos;t provided by the CreatorX <code>/profile</code> endpoint — those fields will be blank unless re-fetched from another source.</span>
                 </div>
               )}
               <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">

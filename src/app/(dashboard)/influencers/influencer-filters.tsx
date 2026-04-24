@@ -59,6 +59,12 @@ export function InfluencerFilters({
   const [, startTransition] = useTransition();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Local state for text inputs (debounced)
+  const [searchText, setSearchText] = useState(currentSearch);
+  const [stateText, setStateText] = useState(currentState);
+  const [cityText, setCityText] = useState(currentCity);
 
   // Auto-show filters that have values from URL
   const [activeFilters, setActiveFilters] = useState<FilterKey[]>(() => {
@@ -70,7 +76,8 @@ export function InfluencerFilters({
     return initial;
   });
 
-  const updateParams = useCallback(
+  // Push URL params immediately
+  const pushParams = useCallback(
     (updates: Record<string, string>) => {
       const params = new URLSearchParams(searchParams.toString());
       for (const [key, value] of Object.entries(updates)) {
@@ -83,6 +90,19 @@ export function InfluencerFilters({
     },
     [router, searchParams, startTransition]
   );
+
+  // Push URL params with debounce (for text inputs)
+  const pushParamsDebounced = useCallback(
+    (updates: Record<string, string>) => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => pushParams(updates), 300);
+    },
+    [pushParams]
+  );
+
+  useEffect(() => {
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, []);
 
   // Close menu on outside click
   useEffect(() => {
@@ -101,39 +121,37 @@ export function InfluencerFilters({
   };
 
   const removeFilter = (key: FilterKey) => {
-    setActiveFilters((prev) => {
-      let next = prev.filter((k) => k !== key);
-      if (key === "state") next = next.filter((k) => k !== "city");
-      return next;
-    });
-    const clear: Record<string, string> = { [key]: "" };
-    if (key === "state") clear.city = "";
-    updateParams(clear);
+    setActiveFilters((prev) => prev.filter((k) => k !== key));
+    // Clear local text state too
+    if (key === "state") setStateText("");
+    if (key === "city") setCityText("");
+    pushParams({ [key]: "" });
   };
 
   const remainingFilters = FILTER_OPTIONS.filter((f) => !activeFilters.includes(f.key));
-  const cities = currentState ? getCitiesForState(currentState) : [];
+  const cities = stateText ? getCitiesForState(stateText) : [];
 
   return (
     <div className="flex flex-wrap items-center gap-3">
-      {/* Search - always visible */}
       <div className="relative flex-1 min-w-[200px] max-w-sm">
         <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           placeholder="Search by name or handle..."
-          defaultValue={currentSearch}
-          onChange={(e) => updateParams({ search: (e.target as HTMLInputElement).value })}
+          value={searchText}
+          onChange={(e) => {
+            setSearchText(e.target.value);
+            pushParamsDebounced({ search: e.target.value });
+          }}
           className="pl-8"
         />
       </div>
 
-      {/* Active filters */}
       {activeFilters.map((key) => (
         <div key={key} className="flex items-center gap-1">
           {key === "tier" && (
             <select
-              defaultValue={currentTier}
-              onChange={(e) => updateParams({ tier: e.target.value })}
+              value={currentTier}
+              onChange={(e) => pushParams({ tier: e.target.value })}
               className={selectClass}
             >
               {tiers.map((t) => (
@@ -144,8 +162,8 @@ export function InfluencerFilters({
 
           {key === "status" && (
             <select
-              defaultValue={currentStatus}
-              onChange={(e) => updateParams({ status: e.target.value })}
+              value={currentStatus}
+              onChange={(e) => pushParams({ status: e.target.value })}
               className={selectClass}
             >
               {statuses.map((s) => (
@@ -158,15 +176,16 @@ export function InfluencerFilters({
             <>
               <input
                 list="influencer-state-options"
-                defaultValue={currentState}
-                onChange={(e) => updateParams({ state: e.target.value, city: "" })}
+                value={stateText}
+                onChange={(e) => {
+                  setStateText(e.target.value);
+                  pushParamsDebounced({ state: e.target.value });
+                }}
                 placeholder="Type or select state..."
                 className={selectClass + " w-[180px]"}
               />
               <datalist id="influencer-state-options">
-                {INDIAN_STATES.map((s) => (
-                  <option key={s} value={s} />
-                ))}
+                {INDIAN_STATES.map((s) => <option key={s} value={s} />)}
               </datalist>
             </>
           )}
@@ -175,19 +194,16 @@ export function InfluencerFilters({
             <>
               <input
                 list="influencer-city-options"
-                defaultValue={currentCity}
-                onChange={(e) => updateParams({ city: e.target.value })}
-                placeholder={currentState && activeFilters.includes("state") ? "Type or select city..." : "Add State first"}
-                disabled={!currentState || !activeFilters.includes("state")}
-                className={
-                  selectClass + " w-[180px]" +
-                  (!currentState || !activeFilters.includes("state") ? " opacity-50 cursor-not-allowed" : "")
-                }
+                value={cityText}
+                onChange={(e) => {
+                  setCityText(e.target.value);
+                  pushParamsDebounced({ city: e.target.value });
+                }}
+                placeholder="Type city name..."
+                className={selectClass + " w-[180px]"}
               />
               <datalist id="influencer-city-options">
-                {cities.map((c) => (
-                  <option key={c} value={c} />
-                ))}
+                {cities.map((c) => <option key={c} value={c} />)}
               </datalist>
             </>
           )}
@@ -202,7 +218,6 @@ export function InfluencerFilters({
         </div>
       ))}
 
-      {/* + button */}
       {remainingFilters.length > 0 && (
         <div className="relative" ref={menuRef}>
           <button

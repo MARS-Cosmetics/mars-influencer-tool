@@ -75,7 +75,7 @@ export interface CultureXProfile {
 
 export interface NormalizedProfile {
   found: boolean;
-  source: "culturex" | "instagram_fallback" | "mock";
+  source: "culturex" | "creatorx" | "instagram_fallback" | "mock";
   handle: string;
   name: string;
   bio: string | null;

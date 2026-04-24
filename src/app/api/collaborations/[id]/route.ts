@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { Prisma } from "@/generated/prisma";
 import { createOrder, type ShopifyOrderInput } from "@/lib/shopify";
 import { withRetry } from "@/lib/shopify-retry";
+import { validateTransition, type CollaborationContext } from "@/lib/state-machine";
 
 export async function GET(
   request: NextRequest,
@@ -117,13 +118,53 @@ export async function PUT(
       select: { status: true, shopifyOrderId: true, dueDate: true },
     });
 
-    // Enforce due date for confirmed and beyond
-    const confirmedStatuses = ["confirmed", "in_progress", "content_submitted", "content_approved", "completed"];
-    if (body.status && confirmedStatuses.includes(body.status)) {
-      const currentDueDate = body.dueDate || previousCollab?.dueDate;
-      if (!currentDueDate) {
+    // Enforce state-machine transition rules if status is changing
+    if (body.status && previousCollab && body.status !== previousCollab.status) {
+      const fullCollab = await prisma.collaboration.findUnique({
+        where: { id },
+        select: {
+          influencerId: true,
+          type: true,
+          requiresContentApproval: true,
+          shopifyOrderId: true,
+          dueDate: true,
+          influencer: { select: { addressLine1: true, phone: true } },
+          _count: { select: { products: true, assets: true } },
+          assets: {
+            select: { status: true, contentUrl: true, contentRating: true },
+          },
+        },
+      });
+
+      if (!fullCollab) {
+        return NextResponse.json({ error: "Collaboration not found" }, { status: 404 });
+      }
+
+      const effectiveDueDate = body.dueDate ?? fullCollab.dueDate;
+
+      const context: CollaborationContext = {
+        influencerId: fullCollab.influencerId,
+        hasProducts: fullCollab._count.products > 0,
+        hasAddress: !!fullCollab.influencer.addressLine1,
+        hasPhone: !!fullCollab.influencer.phone,
+        hasDueDate: !!effectiveDueDate,
+        hasShopifyOrder: !!fullCollab.shopifyOrderId,
+        assetCount: fullCollab._count.assets,
+        assetsCompleted: fullCollab.assets.filter((a) => a.status === "published").length,
+        assetsWithUrl: fullCollab.assets.filter((a) => !!a.contentUrl).length,
+        assetsWithRating: fullCollab.assets.filter((a) => a.contentRating !== null).length,
+        requiresContentApproval: fullCollab.requiresContentApproval,
+        type: fullCollab.type,
+      };
+
+      const result = validateTransition(previousCollab.status, body.status, context);
+      if (!result.valid) {
         return NextResponse.json(
-          { error: "Due date is required before moving to this status", requiresDueDate: true },
+          {
+            error: "Invalid status transition",
+            details: result.errors,
+            warnings: result.warnings,
+          },
           { status: 400 }
         );
       }
@@ -230,8 +271,8 @@ export async function PUT(
           const lineItems = fullCollab.products
             .filter((cp) => cp.product.shopifyVariantId || cp.product.shopifyProductId)
             .map((cp) => ({
-              variant_id: cp.product.shopifyVariantId ? parseInt(cp.product.shopifyVariantId) : undefined,
-              product_id: !cp.product.shopifyVariantId && cp.product.shopifyProductId ? parseInt(cp.product.shopifyProductId) : undefined,
+              variant_id: cp.product.shopifyVariantId ? parseInt(cp.product.shopifyVariantId) : 0,
+              product_id: !cp.product.shopifyVariantId && cp.product.shopifyProductId ? parseInt(cp.product.shopifyProductId) : 0,
               quantity: cp.quantity,
               price: "1.00",
               title: cp.product.name,

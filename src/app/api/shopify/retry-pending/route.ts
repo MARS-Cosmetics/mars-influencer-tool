@@ -32,6 +32,7 @@ export async function POST() {
         variant_id: parseInt(cp.product.shopifyVariantId!),
         quantity: cp.quantity || 1,
         price: '1.00',
+        title: cp.product.name || 'Product',
       }));
 
     if (lineItems.length === 0) {

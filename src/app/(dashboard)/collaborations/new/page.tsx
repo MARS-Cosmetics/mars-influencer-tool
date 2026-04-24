@@ -200,11 +200,11 @@ export default function NewCollaborationPage() {
         }
       });
 
-    // Fetch campaigns
+    // Fetch campaigns (API returns array directly)
     fetch("/api/campaigns")
       .then((r) => r.json())
       .then((data) => {
-        const list = data.campaigns || [];
+        const list = Array.isArray(data) ? data : data.campaigns || [];
         setCampaignOptions(
           list.map((c: { id: string; name: string; status?: string; brand?: { name: string } }) => ({
             value: c.id,

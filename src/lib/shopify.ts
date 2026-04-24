@@ -102,7 +102,7 @@ export async function fetchAllProducts(brandCreds?: ShopifyCredentials | null): 
   let nextUrl: string | null = `${getBaseUrl(brandCreds)}/products.json?limit=250`;
 
   while (nextUrl) {
-    const res = await fetch(nextUrl, { headers: getHeaders(brandCreds) });
+    const res: Response = await fetch(nextUrl, { headers: getHeaders(brandCreds) });
 
     if (!res.ok) {
       const error = await res.text();
@@ -113,9 +113,9 @@ export async function fetchAllProducts(brandCreds?: ShopifyCredentials | null): 
     products.push(...(data.products || []));
 
     // Shopify cursor pagination: use the full URL from Link header
-    const linkHeader = res.headers.get("link");
+    const linkHeader: string | null = res.headers.get("link");
     if (linkHeader) {
-      const nextMatch = linkHeader.match(/<([^>]+)>;\s*rel="next"/);
+      const nextMatch: RegExpMatchArray | null = linkHeader.match(/<([^>]+)>;\s*rel="next"/);
       nextUrl = nextMatch ? nextMatch[1] : null;
     } else {
       nextUrl = null;
@@ -162,6 +162,7 @@ export async function fetchInventoryLevels(
 
 export interface ShopifyOrderLineItem {
   variant_id: number;
+  product_id?: number;
   quantity: number;
   price: string;
   title: string;

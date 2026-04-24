@@ -1,6 +1,7 @@
 "use client";
 
 import { useSession, signOut } from "next-auth/react";
+import { useState } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -9,11 +10,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Badge } from "@/components/ui/badge";
+import {
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
+import { NotificationsPanel } from "@/components/notifications-panel";
 import { LogOut, Bell } from "lucide-react";
 
 export function Header() {
   const { data: session } = useSession();
+  const [hasUnread] = useState(true);
 
   const initials = session?.user?.name
     ?.split(" ")
@@ -25,10 +32,17 @@ export function Header() {
     <header className="flex h-14 items-center justify-between border-b border-zinc-200 bg-white px-6">
       <div />
       <div className="flex items-center gap-3">
-        {/* Notification bell placeholder */}
-        <button className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600">
-          <Bell className="h-4 w-4" />
-        </button>
+        <Popover>
+          <PopoverTrigger className="relative flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600">
+            <Bell className="h-4 w-4" />
+            {hasUnread && (
+              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[#A6192E] ring-2 ring-white" />
+            )}
+          </PopoverTrigger>
+          <PopoverContent side="bottom" align="end" className="w-auto p-0">
+            <NotificationsPanel />
+          </PopoverContent>
+        </Popover>
 
         {session?.user && (
           <DropdownMenu>

@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
+import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { InfluencerTier, InfluencerStatus, Prisma } from "@/generated/prisma";
 import {
@@ -15,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Plus, Search } from "lucide-react";
 import { InfluencerFilters } from "./influencer-filters";
+import { InfluencerTabs } from "./influencer-tabs";
 
 function formatCount(n: number | null | undefined): string {
   if (n == null) return "-";
@@ -73,14 +75,29 @@ export default async function InfluencersPage({
   }
 
   if (state) {
-    where.state = { equals: state, mode: "insensitive" };
+    where.state = { contains: state, mode: "insensitive" };
   }
 
   if (city) {
-    where.city = { equals: city, mode: "insensitive" };
+    where.city = { contains: city, mode: "insensitive" };
   }
 
-  const [influencers, total] = await Promise.all([
+  // Scope discovery bookmark count the same way the Discovered page does,
+  // so the tab counter matches what the user can actually see.
+  const session = await auth();
+  const sessionUser = session?.user as
+    | { id: string; role?: string; brandId?: string | null }
+    | undefined;
+  const bookmarkWhere: Prisma.DiscoveryBookmarkWhereInput =
+    !sessionUser
+      ? { id: "__none__" } // logged-out: count 0
+      : sessionUser.role === "admin"
+        ? {}
+        : sessionUser.brandId
+          ? { campaign: { brandId: sessionUser.brandId } }
+          : { userId: sessionUser.id };
+
+  const [influencers, total, discoveredCount] = await Promise.all([
     prisma.influencer.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -98,6 +115,7 @@ export default async function InfluencersPage({
       },
     }),
     prisma.influencer.count({ where }),
+    prisma.discoveryBookmark.count({ where: bookmarkWhere }),
   ]);
 
   return (
@@ -116,6 +134,8 @@ export default async function InfluencersPage({
           </Button>
         </Link>
       </div>
+
+      <InfluencerTabs discoveredCount={discoveredCount} />
 
       <InfluencerFilters
         currentSearch={search}

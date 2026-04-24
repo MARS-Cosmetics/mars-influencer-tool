@@ -104,11 +104,11 @@ export async function POST(request: Request) {
         const lineItems = shopifyProducts.map((item) => ({
           variant_id: item.product.shopifyVariantId
             ? parseInt(item.product.shopifyVariantId)
-            : undefined,
+            : 0,
           product_id:
             !item.product.shopifyVariantId && item.product.shopifyProductId
               ? parseInt(item.product.shopifyProductId)
-              : undefined,
+              : 0,
           quantity: item.quantity,
           price: "1.00",
           title: item.product.name,

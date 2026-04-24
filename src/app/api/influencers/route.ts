@@ -176,10 +176,25 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(influencer, { status: 201 });
   } catch (error) {
     console.error("Failed to create influencer:", error);
-    const message =
-      error instanceof Prisma.PrismaClientKnownRequestError
-        ? error.message
-        : "Failed to create influencer";
-    return NextResponse.json({ error: message }, { status: 500 });
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      const target = (error.meta?.target as string[]) || [];
+      if (target.includes("instagram_handle")) {
+        return NextResponse.json(
+          { error: "An influencer with this Instagram handle already exists." },
+          { status: 409 }
+        );
+      }
+      return NextResponse.json(
+        { error: "A record with this value already exists." },
+        { status: 409 }
+      );
+    }
+    return NextResponse.json(
+      { error: "Failed to create influencer." },
+      { status: 500 }
+    );
   }
 }

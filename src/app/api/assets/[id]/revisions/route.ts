@@ -53,7 +53,7 @@ export async function POST(
       data: {
         contentUrl: body.contentUrl,
         version: newVersion,
-        status: "in_review",
+        status: "submitted",
       },
     }),
   ]);

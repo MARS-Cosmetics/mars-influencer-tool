@@ -20,13 +20,19 @@ export async function POST() {
     const influencers = await prisma.influencer.findMany({
       where: {
         instagramHandle: { not: null },
-        OR: [
-          { status: "active" },
-          { collaborations: { some: { createdAt: { gte: ninetyDaysAgo } } } },
-        ],
-        OR: [
-          { metricsLastSyncedAt: null },
-          { metricsLastSyncedAt: { lt: sevenDaysAgo } },
+        AND: [
+          {
+            OR: [
+              { status: "active" },
+              { collaborations: { some: { createdAt: { gte: ninetyDaysAgo } } } },
+            ],
+          },
+          {
+            OR: [
+              { metricsLastSyncedAt: null },
+              { metricsLastSyncedAt: { lt: sevenDaysAgo } },
+            ],
+          },
         ],
       },
       select: {

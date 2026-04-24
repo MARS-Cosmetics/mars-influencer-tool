@@ -56,13 +56,11 @@ export default function AgenciesPage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pincodeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedRef = useRef(false);
 
-  // Refs to avoid stale closures in debounced handlers
-  const filtersRef = useRef({ stateFilter, cityFilter, statusFilter, pincodeFilter });
-  filtersRef.current = { stateFilter, cityFilter, statusFilter, pincodeFilter };
-  const searchRef = useRef(search);
-  searchRef.current = search;
+  // Ref always has latest filter values (avoids stale closures)
+  const filtersRef = useRef({ search, stateFilter, cityFilter, statusFilter, pincodeFilter });
+  filtersRef.current = { search, stateFilter, cityFilter, statusFilter, pincodeFilter };
 
   const fetchAgencies = useCallback(
     async (s: string, state: string, city: string, status: string, pincode: string) => {
@@ -85,45 +83,32 @@ export default function AgenciesPage() {
     []
   );
 
-  // Single effect: fetch on mount + refetch when any dropdown filter changes
-  useEffect(() => {
-    fetchAgencies(searchRef.current, stateFilter, cityFilter, statusFilter, pincodeFilter);
-  }, [stateFilter, cityFilter, statusFilter, pincodeFilter, fetchAgencies]);
+  // Fetch with latest ref values (debounced for text, immediate for dropdowns)
+  const fetchNow = useCallback(() => {
+    const f = filtersRef.current;
+    fetchAgencies(f.search, f.stateFilter, f.cityFilter, f.statusFilter, f.pincodeFilter);
+  }, [fetchAgencies]);
 
-  // Debounced search (uses refs so it always reads latest filter values)
-  const handleSearchChange = (value: string) => {
-    setSearch(value);
+  const fetchDebounced = useCallback(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      const f = filtersRef.current;
-      fetchAgencies(value, f.stateFilter, f.cityFilter, f.statusFilter, f.pincodeFilter);
-    }, 300);
-  };
+    debounceRef.current = setTimeout(fetchNow, 300);
+  }, [fetchNow]);
 
-  // Debounced pincode (uses refs so it always reads latest values)
-  const handlePincodeChange = (value: string) => {
-    setPincodeFilter(value);
-    if (pincodeDebounceRef.current) clearTimeout(pincodeDebounceRef.current);
-    pincodeDebounceRef.current = setTimeout(() => {
-      const f = filtersRef.current;
-      fetchAgencies(searchRef.current, f.stateFilter, f.cityFilter, f.statusFilter, value);
-    }, 300);
-  };
-
-  // Cleanup debounce timers
+  // Initial fetch
   useEffect(() => {
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      if (pincodeDebounceRef.current) clearTimeout(pincodeDebounceRef.current);
-    };
+    fetchNow();
+    mountedRef.current = true;
+  }, [fetchNow]);
+
+  // Cleanup
+  useEffect(() => {
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, []);
 
   // Close menu on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
     }
     if (menuOpen) {
       document.addEventListener("mousedown", handleClick);
@@ -131,39 +116,32 @@ export default function AgenciesPage() {
     }
   }, [menuOpen]);
 
-  // State change resets city
-  const handleStateChange = (value: string) => {
-    setStateFilter(value);
-    setCityFilter("");
-  };
+  // --- Filter change handlers ---
+  // Text inputs: update state + debounce fetch
+  const onSearchChange = (v: string) => { setSearch(v); fetchDebounced(); };
+  const onStateChange = (v: string) => { setStateFilter(v); fetchDebounced(); };
+  const onCityChange = (v: string) => { setCityFilter(v); fetchDebounced(); };
+  const onPincodeChange = (v: string) => { setPincodeFilter(v); fetchDebounced(); };
+  // Dropdown: update state + fetch immediately
+  const onStatusChange = (v: string) => { setStatusFilter(v); setTimeout(fetchNow, 0); };
 
-  // Add a filter
+  // Add/remove filter
   const addFilter = (key: FilterKey) => {
     setActiveFilters((prev) => [...prev, key]);
     setMenuOpen(false);
   };
 
-  // Remove a filter, clear its value, and auto-remove city if state is removed
   const removeFilter = (key: FilterKey) => {
-    setActiveFilters((prev) => {
-      let next = prev.filter((k) => k !== key);
-      // Removing state also removes city since city depends on state
-      if (key === "state") next = next.filter((k) => k !== "city");
-      return next;
-    });
-
-    if (key === "state") { setStateFilter(""); setCityFilter(""); }
-    if (key === "city") setCityFilter("");
-    if (key === "status") setStatusFilter("");
-    if (key === "pincode") setPincodeFilter("");
+    setActiveFilters((prev) => prev.filter((k) => k !== key));
+    if (key === "state") { setStateFilter(""); }
+    if (key === "city") { setCityFilter(""); }
+    if (key === "status") { setStatusFilter(""); }
+    if (key === "pincode") { setPincodeFilter(""); }
+    // Fetch after state update flushes (next tick)
+    setTimeout(fetchNow, 0);
   };
 
-  // Filters available in the + menu
-  const remainingFilters = ALL_FILTERS.filter(
-    (f) => !activeFilters.includes(f.key)
-  );
-
-  // Cities cascade from state
+  const remainingFilters = ALL_FILTERS.filter((f) => !activeFilters.includes(f.key));
   const cities = stateFilter ? getCitiesForState(stateFilter) : [];
 
   return (
@@ -187,18 +165,16 @@ export default function AgenciesPage() {
 
       {/* Filters row */}
       <div className="flex flex-wrap items-center gap-3">
-        {/* Search - always visible */}
         <div className="relative max-w-sm flex-1 min-w-[200px]">
           <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none" />
           <Input
             placeholder="Search agencies..."
             value={search}
-            onChange={(e) => handleSearchChange(e.target.value)}
+            onChange={(e) => onSearchChange(e.target.value)}
             className="pl-8"
           />
         </div>
 
-        {/* Active filters */}
         {activeFilters.map((key) => (
           <div key={key} className="flex items-center gap-1">
             {key === "state" && (
@@ -206,49 +182,33 @@ export default function AgenciesPage() {
                 <input
                   list="agency-state-options"
                   value={stateFilter}
-                  onChange={(e) => handleStateChange(e.target.value)}
+                  onChange={(e) => onStateChange(e.target.value)}
                   placeholder="Type or select state..."
                   className={selectClass + " w-[180px]"}
                 />
                 <datalist id="agency-state-options">
-                  {INDIAN_STATES.map((s) => (
-                    <option key={s} value={s} />
-                  ))}
+                  {INDIAN_STATES.map((s) => <option key={s} value={s} />)}
                 </datalist>
               </>
             )}
-
             {key === "city" && (
               <>
                 <input
                   list="agency-city-options"
                   value={cityFilter}
-                  onChange={(e) => setCityFilter(e.target.value)}
-                  disabled={!stateFilter || !activeFilters.includes("state")}
-                  placeholder={
-                    stateFilter && activeFilters.includes("state")
-                      ? "Type or select city..."
-                      : "Add State first"
-                  }
-                  className={
-                    selectClass + " w-[180px]" +
-                    (!stateFilter || !activeFilters.includes("state")
-                      ? " opacity-50 cursor-not-allowed"
-                      : "")
-                  }
+                  onChange={(e) => onCityChange(e.target.value)}
+                  placeholder="Type city name..."
+                  className={selectClass + " w-[180px]"}
                 />
                 <datalist id="agency-city-options">
-                  {cities.map((c) => (
-                    <option key={c} value={c} />
-                  ))}
+                  {cities.map((c) => <option key={c} value={c} />)}
                 </datalist>
               </>
             )}
-
             {key === "status" && (
               <select
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
+                onChange={(e) => onStatusChange(e.target.value)}
                 className={selectClass}
               >
                 <option value="">All Statuses</option>
@@ -256,17 +216,15 @@ export default function AgenciesPage() {
                 <option value="inactive">Inactive</option>
               </select>
             )}
-
             {key === "pincode" && (
               <Input
                 placeholder="Enter pincode"
                 value={pincodeFilter}
-                onChange={(e) => handlePincodeChange(e.target.value)}
+                onChange={(e) => onPincodeChange(e.target.value)}
                 className="h-8 w-[130px] text-sm"
                 maxLength={6}
               />
             )}
-
             <button
               type="button"
               onClick={() => removeFilter(key)}
@@ -277,7 +235,6 @@ export default function AgenciesPage() {
           </div>
         ))}
 
-        {/* + button */}
         {remainingFilters.length > 0 && (
           <div className="relative" ref={menuRef}>
             <button
@@ -288,7 +245,6 @@ export default function AgenciesPage() {
               <Plus className="size-3.5" />
               Filter
             </button>
-
             {menuOpen && (
               <div className="absolute left-0 top-full z-50 mt-1 min-w-[140px] rounded-lg border bg-popover p-1 shadow-md">
                 {remainingFilters.map((f) => (
@@ -307,7 +263,6 @@ export default function AgenciesPage() {
         )}
       </div>
 
-      {/* Table */}
       <div className="rounded-lg border bg-white">
         <Table>
           <TableHeader>

@@ -160,10 +160,19 @@ export default async function CampaignDetailPage({
             <Target className="h-4 w-4 text-gray-400" />
           </CardHeader>
           <CardContent>
-            {campaign.goals ? (
-              <pre className="text-xs text-gray-600 whitespace-pre-wrap">
-                {JSON.stringify(campaign.goals, null, 2)}
-              </pre>
+            {campaign.goals && typeof campaign.goals === "object" && !Array.isArray(campaign.goals) ? (
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                {Object.entries(campaign.goals as Record<string, unknown>).map(([key, value]) => (
+                  <div key={key} className="flex items-center justify-between">
+                    <span className="text-sm text-gray-500 capitalize">
+                      {key.replace(/([A-Z])/g, " $1").trim()}
+                    </span>
+                    <span className="text-sm font-medium">
+                      {typeof value === "number" ? value.toLocaleString("en-IN") : String(value)}
+                    </span>
+                  </div>
+                ))}
+              </div>
             ) : (
               <p className="text-sm text-gray-400">No goals set</p>
             )}

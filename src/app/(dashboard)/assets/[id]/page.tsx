@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { ContentRating } from "@/components/content-rating";
 import { ContentReview } from "@/components/content-review";
+import { RefreshMetricsButton } from "./refresh-metrics-button";
 
 function formatNumber(value: number | null | undefined): string {
   if (value === null || value === undefined) return "-";
@@ -159,6 +160,10 @@ export default async function AssetDetailPage(props: {
             </div>
           </div>
         </div>
+        <RefreshMetricsButton
+          assetId={asset.id}
+          lastSyncedAt={asset.influencer.metricsLastSyncedAt?.toISOString() ?? null}
+        />
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
@@ -415,7 +420,7 @@ export default async function AssetDetailPage(props: {
             status: r.status,
             feedback: r.feedback,
             reviewedAt: r.reviewedAt?.toISOString() ?? null,
-            createdAt: r.createdAt.toISOString(),
+            createdAt: r.submittedAt.toISOString(),
             reviewer: r.reviewer,
           }))}
         />

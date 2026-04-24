@@ -39,6 +39,9 @@ export function CollaborationFilters({
   const [, startTransition] = useTransition();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [searchText, setSearchText] = useState(currentSearch);
 
   const [activeFilters, setActiveFilters] = useState<FilterKey[]>(() => {
     const initial: FilterKey[] = [];
@@ -49,7 +52,7 @@ export function CollaborationFilters({
     return initial;
   });
 
-  const updateParams = useCallback(
+  const pushParams = useCallback(
     (updates: Record<string, string>) => {
       const params = new URLSearchParams(searchParams.toString());
       for (const [key, value] of Object.entries(updates)) {
@@ -62,6 +65,18 @@ export function CollaborationFilters({
     },
     [router, searchParams, startTransition]
   );
+
+  const pushParamsDebounced = useCallback(
+    (updates: Record<string, string>) => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => pushParams(updates), 300);
+    },
+    [pushParams]
+  );
+
+  useEffect(() => {
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, []);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -80,31 +95,32 @@ export function CollaborationFilters({
 
   const removeFilter = (key: FilterKey) => {
     setActiveFilters((prev) => prev.filter((k) => k !== key));
-    updateParams({ [key]: "" });
+    pushParams({ [key]: "" });
   };
 
   const remainingFilters = FILTER_OPTIONS.filter((f) => !activeFilters.includes(f.key));
 
   return (
     <div className="flex flex-wrap items-center gap-3">
-      {/* Search - always visible */}
       <div className="relative flex-1 min-w-[200px] max-w-sm">
         <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           placeholder="Search by influencer name..."
-          defaultValue={currentSearch}
-          onChange={(e) => updateParams({ search: (e.target as HTMLInputElement).value })}
+          value={searchText}
+          onChange={(e) => {
+            setSearchText(e.target.value);
+            pushParamsDebounced({ search: e.target.value });
+          }}
           className="pl-8"
         />
       </div>
 
-      {/* Active filters */}
       {activeFilters.map((key) => (
         <div key={key} className="flex items-center gap-1">
           {key === "type" && (
             <select
-              defaultValue={currentType}
-              onChange={(e) => updateParams({ type: e.target.value })}
+              value={currentType}
+              onChange={(e) => pushParams({ type: e.target.value })}
               className={selectClass}
             >
               <option value="">All Types</option>
@@ -115,8 +131,8 @@ export function CollaborationFilters({
 
           {key === "status" && (
             <select
-              defaultValue={currentStatus}
-              onChange={(e) => updateParams({ status: e.target.value })}
+              value={currentStatus}
+              onChange={(e) => pushParams({ status: e.target.value })}
               className={selectClass}
             >
               <option value="">All Statuses</option>
@@ -134,8 +150,8 @@ export function CollaborationFilters({
 
           {key === "brand" && (
             <select
-              defaultValue={currentBrand}
-              onChange={(e) => updateParams({ brand: e.target.value })}
+              value={currentBrand}
+              onChange={(e) => pushParams({ brand: e.target.value })}
               className={selectClass}
             >
               <option value="">All Brands</option>
@@ -147,8 +163,8 @@ export function CollaborationFilters({
 
           {key === "campaign" && (
             <select
-              defaultValue={currentCampaign}
-              onChange={(e) => updateParams({ campaign: e.target.value })}
+              value={currentCampaign}
+              onChange={(e) => pushParams({ campaign: e.target.value })}
               className={selectClass}
             >
               <option value="">All Campaigns</option>
@@ -168,7 +184,6 @@ export function CollaborationFilters({
         </div>
       ))}
 
-      {/* + button */}
       {remainingFilters.length > 0 && (
         <div className="relative" ref={menuRef}>
           <button

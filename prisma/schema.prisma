@@ -273,6 +273,10 @@ model User {
   activityLogs         ActivityLog[]
   statusTransitions    StatusTransition[]
   assetReviews         AssetRevision[]
+  discoveryBookmarks   DiscoveryBookmark[]  @relation("UserDiscoveryBookmarks")
+  influencerSearches   InfluencerSearch[]   @relation("UserInfluencerSearches")
+  assignedSuggestions  InfluencerSuggestion[] @relation("UserAssignedSuggestions")
+  reviewedSuggestions  InfluencerSuggestion[] @relation("UserReviewedSuggestions")
 
   @@map("users")
 }
@@ -453,6 +457,7 @@ model Influencer {
   invoices       Invoice[]
   contracts      Contract[]
   contentIdeas   ContentIdea[]
+  sourceSuggestions InfluencerSuggestion[] @relation("SuggestionPromotedInfluencer")
 
   @@index([instagramHandle])
   @@index([tier])
@@ -498,6 +503,8 @@ model Campaign {
   creator        User?           @relation("CreatedCampaigns", fields: [createdBy], references: [id])
   collaborations Collaboration[]
   contentIdeas   ContentIdea[]
+  discoveryBookmarks DiscoveryBookmark[]
+  influencerSearches InfluencerSearch[]
 
   @@map("campaigns")
 }
@@ -768,6 +775,10 @@ model Asset {
   revisions     AssetRevision[]
 
   @@index([isViral])
+  @@index([collaborationId])
+  @@index([influencerId, createdAt])
+  @@index([isViral, viralDetectedAt])
+  @@index([publishedAt, status])
   @@map("assets")
 }
 
@@ -828,6 +839,7 @@ model StatusTransition {
   changedByUser User?         @relation(fields: [changedBy], references: [id])
 
   @@index([collaborationId])
+  @@index([toStatus, createdAt])
   @@map("status_transitions")
 }
 
@@ -1154,4 +1166,149 @@ model ActivityLog {
   @@index([entityType, entityId])
   @@index([userId])
   @@map("activity_log")
+}
+
+// ============================================================
+// DISCOVERY FEATURE — AI-powered creator search + bookmarks
+// Tables are used ONLY by src/features/discovery/.
+// To remove the feature, delete these models + the discovery
+// feature folder + the /api/discovery routes + the /discover page.
+// ============================================================
+
+enum BookmarkStatus {
+  new
+  contacted
+  responded
+  shortlisted
+  declined
+  rejected
+}
+
+model DiscoveryBookmark {
+  id              String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String         @map("user_id") @db.Uuid
+  campaignId      String         @map("campaign_id") @db.Uuid
+  platform        String         // "instagram" | "youtube" | "tiktok"
+  externalUserId  String         @map("external_user_id") // Influenzer userId
+  username        String
+  profileSnapshot Json           @map("profile_snapshot") // full profile from Filter API
+  note            String?
+  status          BookmarkStatus @default(new)
+  statusUpdatedAt DateTime?      @map("status_updated_at") @db.Timestamptz()
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt       DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  user     User     @relation("UserDiscoveryBookmarks", fields: [userId], references: [id])
+  campaign Campaign @relation(fields: [campaignId], references: [id])
+
+  @@unique([campaignId, platform, externalUserId])
+  @@index([campaignId])
+  @@index([userId])
+  @@index([status])
+  @@map("discovery_bookmarks")
+}
+
+model InfluencerSearch {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String   @map("user_id") @db.Uuid
+  campaignId      String   @map("campaign_id") @db.Uuid
+  platform        String
+  userPrompt      String   @map("user_prompt") @db.Text
+  generatedFilter Json     @map("generated_filter") // post-resolution filter sent to Influenzer
+  resultCount     Int      @map("result_count")
+  creditsBalance  Decimal? @map("credits_balance") @db.Decimal(12, 2) // balance after search
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  user     User     @relation("UserInfluencerSearches", fields: [userId], references: [id])
+  campaign Campaign @relation(fields: [campaignId], references: [id])
+
+  @@index([campaignId, createdAt])
+  @@index([userId, createdAt])
+  @@map("influencer_searches")
+}
+
+// ============================================================
+// Influencer Suggestions — inbound suggestions (via Telegram bot, etc.)
+// ============================================================
+
+enum SuggestionStatus {
+  pending
+  approved
+  rejected
+}
+
+enum SuggestionSource {
+  telegram
+  manual
+}
+
+model InfluencerSuggestion {
+  id                String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  // Who submitted it (outside the system)
+  source            SuggestionSource @default(telegram)
+  telegramUserId    String?          @map("telegram_user_id")
+  telegramUsername  String?          @map("telegram_username")
+  submittedByName   String?          @map("submitted_by_name")
+
+  // What was submitted
+  platform          String           // "instagram" | "youtube" | "tiktok"
+  profileUrl        String           @map("profile_url")
+  handle            String?          // extracted @handle if parseable
+  note              String?
+
+  // Assignment
+  assignedToUserId  String           @map("assigned_to_user_id") @db.Uuid
+  assignedTo        User             @relation("UserAssignedSuggestions", fields: [assignedToUserId], references: [id])
+
+  // Review
+  status            SuggestionStatus @default(pending)
+  reviewerNote      String?          @map("reviewer_note")
+  reviewedAt        DateTime?        @map("reviewed_at") @db.Timestamptz()
+  reviewedByUserId  String?          @map("reviewed_by_user_id") @db.Uuid
+  reviewedBy        User?            @relation("UserReviewedSuggestions", fields: [reviewedByUserId], references: [id])
+
+  // If approved, link to the created Influencer
+  promotedInfluencerId String?       @map("promoted_influencer_id") @db.Uuid
+  promotedInfluencer   Influencer?   @relation("SuggestionPromotedInfluencer", fields: [promotedInfluencerId], references: [id])
+
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt         DateTime         @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@index([assignedToUserId, status])
+  @@index([status, createdAt])
+  @@index([telegramUserId])
+  @@map("influencer_suggestions")
+}
+
+// ============================================================
+// Telegram Bot Sessions — per-chat conversation state
+// ============================================================
+
+enum TelegramSessionState {
+  idle
+  awaiting_link
+  awaiting_assignee
+  awaiting_note
+}
+
+model TelegramSession {
+  chatId           String               @id @map("chat_id")
+  state            TelegramSessionState @default(idle)
+
+  // Partial data captured during the flow, flushed on completion
+  draftPlatform    String?              @map("draft_platform")
+  draftProfileUrl  String?              @map("draft_profile_url")
+  draftHandle      String?              @map("draft_handle")
+  draftAssigneeId  String?              @map("draft_assignee_id") @db.Uuid
+
+  // Identity captured on first /start
+  telegramUserId   String?              @map("telegram_user_id")
+  telegramUsername String?              @map("telegram_username")
+  firstName        String?              @map("first_name")
+
+  createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt        DateTime             @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@map("telegram_sessions")
 }

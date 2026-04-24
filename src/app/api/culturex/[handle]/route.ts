@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { fetchProfile, USE_MOCK } from "@/lib/culturex";
+import { fetchProfile as fetchCultureX } from "@/lib/culturex";
+import { fetchProfile as fetchCreatorX, isCreatorXConfigured } from "@/lib/creatorx";
 import { fetchPublicProfile } from "@/lib/instagram";
 import { prisma } from "@/lib/db";
 
@@ -35,9 +36,16 @@ export async function GET(
     });
   }
 
-  // Try CultureX first
-  const profile = await fetchProfile(cleanHandle);
+  // Prefer CreatorX when configured (replaces mock data in dev).
+  if (isCreatorXConfigured()) {
+    const creatorx = await fetchCreatorX(cleanHandle);
+    if (creatorx && creatorx.found) {
+      return NextResponse.json(creatorx);
+    }
+  }
 
+  // CultureX (real if CULTUREX_API_TOKEN set, otherwise deterministic mock).
+  const profile = await fetchCultureX(cleanHandle);
   if (profile && profile.found) {
     return NextResponse.json(profile);
   }

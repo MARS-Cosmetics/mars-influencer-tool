@@ -23,6 +23,7 @@ import {
   Settings,
   Globe,
   Trophy,
+  Search,
 } from "lucide-react";
 
 const navSections = [
@@ -37,6 +38,7 @@ const navSections = [
     label: "People",
     items: [
       { label: "Influencers", href: "/influencers", icon: Users },
+      { label: "Discover", href: "/discover", icon: Search },
       { label: "Collaborations", href: "/collaborations", icon: Handshake },
       { label: "Campaigns", href: "/campaigns", icon: Megaphone },
       { label: "Agencies", href: "/agencies", icon: Building2 },

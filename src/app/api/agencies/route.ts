@@ -51,11 +51,11 @@ export async function GET(request: Request) {
     }
 
     if (city) {
-      where.city = { equals: city, mode: "insensitive" };
+      where.city = { contains: city, mode: "insensitive" };
     }
 
     if (state) {
-      where.state = { equals: state, mode: "insensitive" };
+      where.state = { contains: state, mode: "insensitive" };
     }
 
     if (status === "active") {

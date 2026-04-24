@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,8 +30,36 @@ export default function NewCampaignPage() {
     currency: "INR",
     startDate: "",
     endDate: "",
-    goals: "",
   });
+
+  const [goals, setGoals] = useState({
+    reach: "",
+    engagement: "",
+    impressions: "",
+    conversions: "",
+    videoViews: "",
+    linkClicks: "",
+  });
+
+  const [customGoals, setCustomGoals] = useState<{ name: string; value: string }[]>([]);
+
+  function handleGoalChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setGoals((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  }
+
+  function addCustomGoal() {
+    setCustomGoals((prev) => [...prev, { name: "", value: "" }]);
+  }
+
+  function updateCustomGoal(index: number, field: "name" | "value", val: string) {
+    setCustomGoals((prev) =>
+      prev.map((g, i) => (i === index ? { ...g, [field]: val } : g))
+    );
+  }
+
+  function removeCustomGoal(index: number) {
+    setCustomGoals((prev) => prev.filter((_, i) => i !== index));
+  }
 
   useEffect(() => {
     fetch("/api/brands")
@@ -54,15 +82,18 @@ export default function NewCampaignPage() {
       return;
     }
 
-    let goals = null;
-    if (form.goals.trim()) {
-      try {
-        goals = JSON.parse(form.goals);
-      } catch {
-        toast.error("Goals must be valid JSON.");
-        return;
+    // Build goals object from preset + custom fields
+    const goalsObj: Record<string, number | string> = {};
+    for (const [key, val] of Object.entries(goals)) {
+      if (val.trim()) goalsObj[key] = parseInt(val, 10);
+    }
+    for (const cg of customGoals) {
+      if (cg.name.trim() && cg.value.trim()) {
+        const num = Number(cg.value);
+        goalsObj[cg.name.trim()] = isNaN(num) ? cg.value.trim() : num;
       }
     }
+    const goalsPayload = Object.keys(goalsObj).length > 0 ? goalsObj : null;
 
     setLoading(true);
     try {
@@ -72,7 +103,7 @@ export default function NewCampaignPage() {
         body: JSON.stringify({
           ...form,
           totalBudget: form.totalBudget || null,
-          goals,
+          goals: goalsPayload,
         }),
       });
 
@@ -215,16 +246,120 @@ export default function NewCampaignPage() {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="goals">Goals (JSON)</Label>
-              <Textarea
-                id="goals"
-                name="goals"
-                value={form.goals}
-                onChange={handleChange}
-                placeholder='e.g. {"reach": 100000, "engagement": 5000}'
-                rows={3}
-              />
+            <div className="space-y-3">
+              <Label>Campaign Goals</Label>
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="reach" className="text-xs text-muted-foreground">Target Reach</Label>
+                  <Input
+                    id="reach"
+                    name="reach"
+                    type="number"
+                    min="0"
+                    value={goals.reach}
+                    onChange={handleGoalChange}
+                    placeholder="e.g. 100000"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="engagement" className="text-xs text-muted-foreground">Target Engagement</Label>
+                  <Input
+                    id="engagement"
+                    name="engagement"
+                    type="number"
+                    min="0"
+                    value={goals.engagement}
+                    onChange={handleGoalChange}
+                    placeholder="e.g. 5000"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="impressions" className="text-xs text-muted-foreground">Target Impressions</Label>
+                  <Input
+                    id="impressions"
+                    name="impressions"
+                    type="number"
+                    min="0"
+                    value={goals.impressions}
+                    onChange={handleGoalChange}
+                    placeholder="e.g. 500000"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="videoViews" className="text-xs text-muted-foreground">Target Video Views</Label>
+                  <Input
+                    id="videoViews"
+                    name="videoViews"
+                    type="number"
+                    min="0"
+                    value={goals.videoViews}
+                    onChange={handleGoalChange}
+                    placeholder="e.g. 50000"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="linkClicks" className="text-xs text-muted-foreground">Target Link Clicks</Label>
+                  <Input
+                    id="linkClicks"
+                    name="linkClicks"
+                    type="number"
+                    min="0"
+                    value={goals.linkClicks}
+                    onChange={handleGoalChange}
+                    placeholder="e.g. 2000"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="conversions" className="text-xs text-muted-foreground">Target Conversions</Label>
+                  <Input
+                    id="conversions"
+                    name="conversions"
+                    type="number"
+                    min="0"
+                    value={goals.conversions}
+                    onChange={handleGoalChange}
+                    placeholder="e.g. 500"
+                  />
+                </div>
+              </div>
+
+              {/* Custom goals */}
+              {customGoals.map((cg, i) => (
+                <div key={i} className="flex items-end gap-3">
+                  <div className="flex-1 space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Goal Name</Label>
+                    <Input
+                      value={cg.name}
+                      onChange={(e) => updateCustomGoal(i, "name", e.target.value)}
+                      placeholder="e.g. Brand Mentions"
+                    />
+                  </div>
+                  <div className="flex-1 space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Target Value</Label>
+                    <Input
+                      value={cg.value}
+                      onChange={(e) => updateCustomGoal(i, "value", e.target.value)}
+                      placeholder="e.g. 1000"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeCustomGoal(i)}
+                    className="mb-0.5 rounded p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                  >
+                    <X className="size-4" />
+                  </button>
+                </div>
+              ))}
+
+              <button
+                type="button"
+                onClick={addCustomGoal}
+                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Plus className="size-4" />
+                Add Custom Goal
+              </button>
             </div>
 
             <div className="flex gap-4">

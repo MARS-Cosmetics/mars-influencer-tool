@@ -84,9 +84,9 @@ export default function SettingsPage() {
                 </p>
               )}
             </div>
-            <Button variant="outline" asChild>
-              <Link href="/change-password">Change Password</Link>
-            </Button>
+            <Link href="/change-password">
+              <Button variant="outline">Change Password</Button>
+            </Link>
           </div>
         </CardContent>
       </Card>
