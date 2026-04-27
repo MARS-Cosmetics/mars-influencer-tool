@@ -24,6 +24,7 @@ import {
   Globe,
   Trophy,
   Search,
+  UserCog,
 } from "lucide-react";
 
 const navSections = [
@@ -68,6 +69,7 @@ const navSections = [
     label: "Settings",
     items: [
       { label: "Allowed Domains", href: "/settings/domains", icon: Globe },
+      { label: "Users", href: "/settings/users", icon: UserCog },
     ],
   },
 ];
