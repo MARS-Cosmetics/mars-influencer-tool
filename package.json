@@ -14,6 +14,7 @@
     "db:generate": "npx prisma generate && node prisma/postgenerate.mjs",
     "db:push": "npx prisma db push",
     "admin:bootstrap": "npx tsx scripts/bootstrap-admin.ts",
+    "auth:reset": "npx tsx scripts/reset-auth.ts",
     "dev:uat": "NEXT_PUBLIC_APP_ENV=uat next dev --port 3001",
     "build:uat": "NEXT_PUBLIC_APP_ENV=uat next build",
     "build:prod": "NEXT_PUBLIC_APP_ENV=production next build",

@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
       password: hashed,
       role: role as "admin" | "manager" | "user",
       brandId,
-      mustChangePassword: true,
+      mustChangePassword: false,
     },
     select: {
       id: true,

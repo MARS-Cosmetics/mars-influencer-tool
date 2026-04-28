@@ -41,7 +41,7 @@ export const authConfig: NextAuthConfig = {
       if (isApiAuth) return true;
       if (isLoginPage) return true;
 
-      // Allow change-password page for logged-in users
+      // Allow change-password page for logged-in users (still available, just not forced)
       if (isChangePassword && isLoggedIn) return true;
 
       // Redirect to login if not authenticated
@@ -49,15 +49,6 @@ export const authConfig: NextAuthConfig = {
 
       // Allow all API routes for authenticated users (they handle their own auth)
       if (isApi) return true;
-
-      // Check if user must change password — redirect to change-password
-      // This uses the JWT token value
-      const mustChange = (
-        auth?.user as { mustChangePassword?: boolean } | undefined
-      )?.mustChangePassword;
-      if (mustChange && !isChangePassword) {
-        return Response.redirect(new URL("/change-password", nextUrl));
-      }
 
       return true;
     },

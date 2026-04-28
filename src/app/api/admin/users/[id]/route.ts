@@ -103,7 +103,7 @@ export async function PATCH(
     const pwError = validatePassword(body.password);
     if (pwError) return NextResponse.json({ error: pwError }, { status: 400 });
     data.password = await hash(body.password, 12);
-    data.mustChangePassword = true;
+    data.mustChangePassword = false;
     data.lastPasswordChange = new Date();
   }
 

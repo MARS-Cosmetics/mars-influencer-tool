@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { MarsLogo } from "@/components/mars-logo";
 import {
@@ -27,7 +28,19 @@ import {
   UserCog,
 } from "lucide-react";
 
-const navSections = [
+type NavItem = {
+  label: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  requireRole?: "admin";
+};
+
+type NavSection = {
+  label: string;
+  items: NavItem[];
+};
+
+const navSections: NavSection[] = [
   {
     label: "Overview",
     items: [
@@ -68,14 +81,36 @@ const navSections = [
   {
     label: "Settings",
     items: [
-      { label: "Allowed Domains", href: "/settings/domains", icon: Globe },
-      { label: "Users", href: "/settings/users", icon: UserCog },
+      {
+        label: "Allowed Domains",
+        href: "/settings/domains",
+        icon: Globe,
+        requireRole: "admin",
+      },
+      {
+        label: "Users",
+        href: "/settings/users",
+        icon: UserCog,
+        requireRole: "admin",
+      },
     ],
   },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { data: session } = useSession();
+  const role = (session?.user as { role?: string } | undefined)?.role;
+  const isAdmin = role === "admin";
+
+  const visibleSections = navSections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter(
+        (item) => !item.requireRole || (item.requireRole === "admin" && isAdmin)
+      ),
+    }))
+    .filter((section) => section.items.length > 0);
 
   return (
     <aside className="flex h-screen w-[260px] flex-col bg-black text-white">
@@ -95,7 +130,7 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-5">
-        {navSections.map((section) => (
+        {visibleSections.map((section) => (
           <div key={section.label}>
             <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.15em] text-white/30">
               {section.label}
