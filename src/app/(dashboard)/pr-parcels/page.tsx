@@ -1,9 +1,10 @@
-export const dynamic = "force-dynamic";
+"use client";
 
-import { prisma } from "@/lib/db";
-import { ParcelStatus } from "@/generated/prisma";
+import { useState } from "react";
 import Link from "next/link";
-import { Plus, Package } from "lucide-react";
+import useSWR from "swr";
+import { fetcher } from "@/lib/fetcher";
+import { Plus, Package, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,44 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Pagination } from "@/components/ui/pagination";
+import { Skeleton } from "@/components/ui/skeleton";
+
+type ParcelStatus =
+  | "preparing"
+  | "shipped"
+  | "in_transit"
+  | "delivered"
+  | "returned";
+
+type Parcel = {
+  id: string;
+  status: ParcelStatus;
+  shopifyOrderId: string | null;
+  shopifyOrderNumber: string | null;
+  courierName: string | null;
+  trackingNumber: string | null;
+  shippedAt: string | null;
+  deliveredAt: string | null;
+  influencer: { id: string; name: string };
+  brand: { id: string; name: string };
+};
+
+type ParcelsResponse = {
+  items: Parcel[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+const PAGE_SIZE = 50;
+const STATUSES: ParcelStatus[] = [
+  "preparing",
+  "shipped",
+  "in_transit",
+  "delivered",
+  "returned",
+];
 
 const parcelStatusColors: Record<ParcelStatus, string> = {
   preparing: "bg-gray-100 text-gray-700",
@@ -25,7 +64,7 @@ const parcelStatusColors: Record<ParcelStatus, string> = {
   returned: "bg-red-100 text-red-700",
 };
 
-function formatDate(date: Date | null | undefined): string {
+function formatDate(date: string | null): string {
   if (!date) return "-";
   return new Date(date).toLocaleDateString("en-IN", {
     day: "2-digit",
@@ -34,35 +73,39 @@ function formatDate(date: Date | null | undefined): string {
   });
 }
 
-export default async function PrParcelsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ search?: string; status?: string }>;
-}) {
-  const { search, status } = await searchParams;
+export default function PrParcelsPage() {
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("");
+  const [page, setPage] = useState(1);
 
-  const where: Record<string, unknown> = {};
+  const offset = (page - 1) * PAGE_SIZE;
 
-  if (search) {
-    where.OR = [
-      { trackingNumber: { contains: search, mode: "insensitive" } },
-      { courierName: { contains: search, mode: "insensitive" } },
-      { influencer: { name: { contains: search, mode: "insensitive" } } },
-    ];
-  }
+  const url = `/api/pr-parcels?limit=${PAGE_SIZE}&offset=${offset}${
+    search ? `&search=${encodeURIComponent(search)}` : ""
+  }${status ? `&status=${encodeURIComponent(status)}` : ""}`;
 
-  if (status) {
-    where.status = status;
-  }
-
-  const parcels = await prisma.prParcel.findMany({
-    where,
-    include: {
-      influencer: true,
-      brand: true,
-    },
-    orderBy: { createdAt: "desc" },
+  const { data, isLoading, error } = useSWR<ParcelsResponse>(url, fetcher, {
+    keepPreviousData: true,
+    revalidateOnFocus: false,
+    revalidateIfStale: false,
   });
+
+  const parcels = data?.items ?? [];
+  const total = data?.total ?? 0;
+
+  const applyFilters = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSearch(searchInput);
+    setPage(1);
+  };
+
+  const resetFilters = () => {
+    setSearchInput("");
+    setSearch("");
+    setStatus("");
+    setPage(1);
+  };
 
   return (
     <div className="space-y-6">
@@ -79,31 +122,40 @@ export default async function PrParcelsPage({
         </Link>
       </div>
 
-      <div className="flex items-center gap-4">
-        <form className="flex items-center gap-4 flex-1">
-          <Input
-            name="search"
-            placeholder="Search by influencer, courier, or tracking..."
-            defaultValue={search || ""}
-            className="max-w-sm"
-          />
-          <select
-            name="status"
-            defaultValue={status || ""}
-            className="flex h-9 w-full max-w-[180px] rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-          >
-            <option value="">All Statuses</option>
-            {Object.values(ParcelStatus).map((s) => (
-              <option key={s} value={s}>
-                {s.replace("_", " ").replace(/\b\w/g, (c) => c.toUpperCase())}
-              </option>
-            ))}
-          </select>
-          <Button type="submit" variant="outline">
-            Filter
+      <form
+        onSubmit={applyFilters}
+        className="flex flex-wrap items-center gap-3"
+      >
+        <Input
+          placeholder="Search by influencer, courier, or tracking..."
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          className="max-w-sm"
+        />
+        <select
+          value={status}
+          onChange={(e) => {
+            setStatus(e.target.value);
+            setPage(1);
+          }}
+          className="flex h-9 w-full max-w-[180px] rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+        >
+          <option value="">All Statuses</option>
+          {STATUSES.map((s) => (
+            <option key={s} value={s}>
+              {s.replace("_", " ").replace(/\b\w/g, (c) => c.toUpperCase())}
+            </option>
+          ))}
+        </select>
+        <Button type="submit" variant="outline">
+          Search
+        </Button>
+        {(search || status) && (
+          <Button type="button" variant="ghost" onClick={resetFilters}>
+            Clear
           </Button>
-        </form>
-      </div>
+        )}
+      </form>
 
       <Card>
         <CardContent className="p-0">
@@ -121,9 +173,31 @@ export default async function PrParcelsPage({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {parcels.length === 0 ? (
+              {error ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-gray-500 py-8">
+                  <TableCell
+                    colSpan={8}
+                    className="text-center text-red-500 py-8"
+                  >
+                    Failed to load PR parcels.
+                  </TableCell>
+                </TableRow>
+              ) : isLoading && !data ? (
+                Array.from({ length: 8 }).map((_, i) => (
+                  <TableRow key={i}>
+                    {Array.from({ length: 8 }).map((__, j) => (
+                      <TableCell key={j}>
+                        <Skeleton className="h-4 w-full" />
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              ) : parcels.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={8}
+                    className="text-center text-gray-500 py-8"
+                  >
                     No PR parcels found.
                   </TableCell>
                 </TableRow>
@@ -170,6 +244,23 @@ export default async function PrParcelsPage({
           </Table>
         </CardContent>
       </Card>
+
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-xs text-gray-400">
+          {isLoading && data && (
+            <>
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Updating…
+            </>
+          )}
+        </div>
+        <Pagination
+          page={page}
+          pageSize={PAGE_SIZE}
+          total={total}
+          onPageChange={setPage}
+        />
+      </div>
     </div>
   );
 }

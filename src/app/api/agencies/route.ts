@@ -53,7 +53,7 @@ export async function GET(request: Request) {
     if (city) {
       where.city = { contains: city, mode: "insensitive" };
     }
-
+ 
     if (state) {
       where.state = { contains: state, mode: "insensitive" };
     }

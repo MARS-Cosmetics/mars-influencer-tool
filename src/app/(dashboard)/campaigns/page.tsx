@@ -1,11 +1,13 @@
-export const dynamic = "force-dynamic";
+"use client";
 
-import { prisma } from "@/lib/db";
-import { CampaignStatus } from "@/generated/prisma";
+import { useState } from "react";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import useSWR from "swr";
+import { fetcher } from "@/lib/fetcher";
+import { Plus, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -14,7 +16,44 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { CampaignFilters } from "./campaign-filters";
+import { Pagination } from "@/components/ui/pagination";
+import { Skeleton } from "@/components/ui/skeleton";
+
+type CampaignStatus =
+  | "draft"
+  | "active"
+  | "paused"
+  | "completed"
+  | "cancelled";
+
+type Campaign = {
+  id: string;
+  name: string;
+  status: CampaignStatus;
+  totalBudget: number | string | null;
+  spentBudget: number | string | null;
+  startDate: string | null;
+  endDate: string | null;
+  brand: { id: string; name: string };
+};
+
+type CampaignsResponse = {
+  items: Campaign[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+type Brand = { id: string; name: string };
+
+const PAGE_SIZE = 50;
+const STATUSES: CampaignStatus[] = [
+  "draft",
+  "active",
+  "paused",
+  "completed",
+  "cancelled",
+];
 
 const statusColors: Record<CampaignStatus, string> = {
   draft: "bg-gray-100 text-gray-700",
@@ -29,7 +68,7 @@ function formatCurrency(value: unknown): string {
   return `₹${Number(value).toLocaleString("en-IN")}`;
 }
 
-function formatDate(date: Date | null | undefined): string {
+function formatDate(date: string | null): string {
   if (!date) return "-";
   return new Date(date).toLocaleDateString("en-IN", {
     day: "2-digit",
@@ -38,41 +77,50 @@ function formatDate(date: Date | null | undefined): string {
   });
 }
 
-export default async function CampaignsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
-}) {
-  const params = await searchParams;
-  const search = typeof params.search === "string" ? params.search : "";
-  const status = typeof params.status === "string" ? params.status : "";
-  const brandFilter = typeof params.brand === "string" ? params.brand : "";
+export default function CampaignsPage() {
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("");
+  const [brandId, setBrandId] = useState("");
+  const [page, setPage] = useState(1);
 
-  const where: Record<string, unknown> = {};
+  const offset = (page - 1) * PAGE_SIZE;
 
-  if (search) {
-    where.name = { contains: search, mode: "insensitive" };
-  }
+  const url = `/api/campaigns?limit=${PAGE_SIZE}&offset=${offset}${
+    search ? `&search=${encodeURIComponent(search)}` : ""
+  }${status ? `&status=${encodeURIComponent(status)}` : ""}${
+    brandId ? `&brandId=${encodeURIComponent(brandId)}` : ""
+  }`;
 
-  if (status) {
-    where.status = status;
-  }
+  const { data, isLoading, error } = useSWR<CampaignsResponse>(url, fetcher, {
+    keepPreviousData: true,
+    revalidateOnFocus: false,
+    revalidateIfStale: false,
+  });
 
-  if (brandFilter) {
-    where.brandId = brandFilter;
-  }
+  const { data: brandData } = useSWR<{ brands: Brand[] }>(
+    "/api/brands",
+    fetcher,
+    { revalidateOnFocus: false, revalidateIfStale: false }
+  );
 
-  const [campaigns, brands] = await Promise.all([
-    prisma.campaign.findMany({
-      where,
-      include: { brand: true },
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.brand.findMany({
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
-    }),
-  ]);
+  const brands = brandData?.brands ?? [];
+  const campaigns = data?.items ?? [];
+  const total = data?.total ?? 0;
+
+  const applyFilters = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSearch(searchInput);
+    setPage(1);
+  };
+
+  const resetFilters = () => {
+    setSearchInput("");
+    setSearch("");
+    setStatus("");
+    setBrandId("");
+    setPage(1);
+  };
 
   return (
     <div className="space-y-6">
@@ -86,13 +134,55 @@ export default async function CampaignsPage({
         </Link>
       </div>
 
-      <CampaignFilters
-        currentSearch={search}
-        currentStatus={status}
-        currentBrand={brandFilter}
-        brands={brands}
-        campaignStatuses={Object.values(CampaignStatus)}
-      />
+      <form
+        onSubmit={applyFilters}
+        className="flex flex-wrap items-center gap-3"
+      >
+        <Input
+          placeholder="Search by name..."
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          className="max-w-sm"
+        />
+        <select
+          value={status}
+          onChange={(e) => {
+            setStatus(e.target.value);
+            setPage(1);
+          }}
+          className="h-8 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm"
+        >
+          <option value="">All Statuses</option>
+          {STATUSES.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+        <select
+          value={brandId}
+          onChange={(e) => {
+            setBrandId(e.target.value);
+            setPage(1);
+          }}
+          className="h-8 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm"
+        >
+          <option value="">All Brands</option>
+          {brands.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.name}
+            </option>
+          ))}
+        </select>
+        <Button type="submit" variant="outline">
+          Search
+        </Button>
+        {(search || status || brandId) && (
+          <Button type="button" variant="ghost" onClick={resetFilters}>
+            Clear
+          </Button>
+        )}
+      </form>
 
       <div className="rounded-lg border bg-white">
         <Table>
@@ -108,9 +198,28 @@ export default async function CampaignsPage({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {campaigns.length === 0 ? (
+            {error ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-gray-500 py-8">
+                <TableCell colSpan={7} className="text-center text-red-500 py-8">
+                  Failed to load campaigns.
+                </TableCell>
+              </TableRow>
+            ) : isLoading && !data ? (
+              Array.from({ length: 8 }).map((_, i) => (
+                <TableRow key={i}>
+                  {Array.from({ length: 7 }).map((__, j) => (
+                    <TableCell key={j}>
+                      <Skeleton className="h-4 w-full" />
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : campaigns.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={7}
+                  className="text-center text-gray-500 py-8"
+                >
                   No campaigns found.
                 </TableCell>
               </TableRow>
@@ -140,6 +249,23 @@ export default async function CampaignsPage({
             )}
           </TableBody>
         </Table>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-xs text-gray-400">
+          {isLoading && data && (
+            <>
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Updating…
+            </>
+          )}
+        </div>
+        <Pagination
+          page={page}
+          pageSize={PAGE_SIZE}
+          total={total}
+          onPageChange={setPage}
+        />
       </div>
     </div>
   );

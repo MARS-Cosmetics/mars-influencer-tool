@@ -6,6 +6,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") || "";
     const status = searchParams.get("status") || "";
+    const brandId = searchParams.get("brandId") || "";
 
     const where: Record<string, unknown> = {};
 
@@ -17,13 +18,31 @@ export async function GET(request: Request) {
       where.status = status;
     }
 
-    const campaigns = await prisma.campaign.findMany({
-      where,
-      include: { brand: true },
-      orderBy: { createdAt: "desc" },
-    });
+    if (brandId) {
+      where.brandId = brandId;
+    }
 
-    return NextResponse.json(campaigns);
+    const limit = Math.min(
+      parseInt(searchParams.get("limit") || "50", 10),
+      200
+    );
+    const offset = Math.max(
+      parseInt(searchParams.get("offset") || "0", 10),
+      0
+    );
+
+    const [items, total] = await Promise.all([
+      prisma.campaign.findMany({
+        where,
+        include: { brand: true },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+        skip: offset,
+      }),
+      prisma.campaign.count({ where }),
+    ]);
+
+    return NextResponse.json({ items, total, limit, offset });
   } catch (error) {
     console.error("Failed to fetch campaigns:", error);
     return NextResponse.json(

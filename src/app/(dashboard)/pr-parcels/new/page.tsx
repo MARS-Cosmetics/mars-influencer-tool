@@ -99,7 +99,7 @@ export default function NewPrParcelPage() {
   useEffect(() => {
     Promise.all([
       fetch("/api/influencers?limit=500").then((r) => r.json()),
-      fetch("/api/products").then((r) => r.json()),
+      fetch("/api/products?limit=500").then((r) => r.json()),
     ])
       .then(([influencersData, productsData]) => {
         const influencers = influencersData.influencers || [];
@@ -120,7 +120,7 @@ export default function NewPrParcelPage() {
 
         const prods: ProductDetail[] = Array.isArray(productsData)
           ? productsData
-          : productsData.products || [];
+          : productsData.items || productsData.products || [];
         setAllProducts(prods);
         setProductOptions(
           prods.map((p) => ({

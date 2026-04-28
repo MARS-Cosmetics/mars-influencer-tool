@@ -25,18 +25,27 @@ export async function GET(request: Request) {
       where.category = category;
     }
 
-    const limit = parseInt(searchParams.get("limit") || "100", 10);
-    const offset = parseInt(searchParams.get("offset") || "0", 10);
+    const limit = Math.min(
+      parseInt(searchParams.get("limit") || "50", 10),
+      200
+    );
+    const offset = Math.max(
+      parseInt(searchParams.get("offset") || "0", 10),
+      0
+    );
 
-    const products = await prisma.product.findMany({
-      where,
-      include: { brand: true },
-      orderBy: { name: "asc" },
-      take: limit,
-      skip: offset,
-    });
+    const [items, total] = await Promise.all([
+      prisma.product.findMany({
+        where,
+        include: { brand: true },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+        skip: offset,
+      }),
+      prisma.product.count({ where }),
+    ]);
 
-    return NextResponse.json(products);
+    return NextResponse.json({ items, total, limit, offset });
   } catch (error) {
     console.error("Failed to fetch products:", error);
     return NextResponse.json(
@@ -46,11 +55,12 @@ export async function GET(request: Request) {
   }
 }
 
-// Products are read-only — managed via Shopify sync
-// No manual product creation allowed
 export async function POST() {
   return NextResponse.json(
-    { error: "Products are managed via Shopify sync. Use Shopify Integration > Sync Now to add products." },
+    {
+      error:
+        "Products are managed via Shopify sync. Use Shopify Integration > Sync Now to add products.",
+    },
     { status: 403 }
   );
 }

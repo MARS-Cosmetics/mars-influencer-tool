@@ -23,19 +23,33 @@ export async function GET(request: Request) {
       where.status = status;
     }
 
-    const parcels = await prisma.prParcel.findMany({
-      where,
-      include: {
-        influencer: true,
-        brand: true,
-        items: {
-          include: { product: true },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-    });
+    const limit = Math.min(
+      parseInt(searchParams.get("limit") || "50", 10),
+      200
+    );
+    const offset = Math.max(
+      parseInt(searchParams.get("offset") || "0", 10),
+      0
+    );
 
-    return NextResponse.json(parcels);
+    const [items, total] = await Promise.all([
+      prisma.prParcel.findMany({
+        where,
+        include: {
+          influencer: true,
+          brand: true,
+          items: {
+            include: { product: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+        skip: offset,
+      }),
+      prisma.prParcel.count({ where }),
+    ]);
+
+    return NextResponse.json({ items, total, limit, offset });
   } catch (error) {
     console.error("Failed to fetch PR parcels:", error);
     return NextResponse.json(

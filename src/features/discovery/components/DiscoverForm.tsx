@@ -35,12 +35,13 @@ function useCampaigns() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch("/api/campaigns");
+        const res = await fetch("/api/campaigns?limit=200");
         if (!res.ok) {
           setError("Failed to load campaigns");
           return;
         }
-        setCampaigns((await res.json()) as CampaignLite[]);
+        const data = (await res.json()) as { items: CampaignLite[] };
+        setCampaigns(data.items);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Network error");
       } finally {

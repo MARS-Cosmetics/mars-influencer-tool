@@ -1,4 +1,4 @@
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 import { prisma } from "@/lib/db";
 import { calculateEarnedMediaValue } from "@/lib/viral-detection";
@@ -57,7 +57,7 @@ export default async function ViralContentPage() {
   const sixMonthsAgo = new Date();
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
-  // Fetch viral assets from last 90 days
+  // Fetch viral assets from last 90 days (capped to keep dashboard fast)
   const viralAssets = await prisma.asset.findMany({
     where: {
       isViral: true,
@@ -75,6 +75,7 @@ export default async function ViralContentPage() {
       },
     },
     orderBy: { viralMultiplier: "desc" },
+    take: 100,
   });
 
   // Summary

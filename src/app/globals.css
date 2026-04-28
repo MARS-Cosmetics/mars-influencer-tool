@@ -134,3 +134,33 @@
     @apply font-sans;
   }
 }
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    oklch(0.93 0.003 80) 0%,
+    oklch(0.97 0.003 80) 50%,
+    oklch(0.93 0.003 80) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+.dark .shimmer {
+  background: linear-gradient(
+    90deg,
+    oklch(0.25 0 0) 0%,
+    oklch(0.32 0 0) 50%,
+    oklch(0.25 0 0) 100%
+  );
+  background-size: 200% 100%;
+}

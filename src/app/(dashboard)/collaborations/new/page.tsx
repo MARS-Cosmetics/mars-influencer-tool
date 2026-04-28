@@ -200,11 +200,13 @@ export default function NewCollaborationPage() {
         }
       });
 
-    // Fetch campaigns (API returns array directly)
-    fetch("/api/campaigns")
+    // Fetch campaigns (API returns { items, total, ... })
+    fetch("/api/campaigns?limit=200")
       .then((r) => r.json())
       .then((data) => {
-        const list = Array.isArray(data) ? data : data.campaigns || [];
+        const list = Array.isArray(data)
+          ? data
+          : data.items || data.campaigns || [];
         setCampaignOptions(
           list.map((c: { id: string; name: string; status?: string; brand?: { name: string } }) => ({
             value: c.id,
@@ -248,11 +250,13 @@ export default function NewCollaborationPage() {
         }
       });
 
-    // Fetch products
-    fetch("/api/products")
+    // Fetch products (API returns { items, total, ... })
+    fetch("/api/products?limit=500")
       .then((r) => r.json())
       .then((data) => {
-        const list = Array.isArray(data) ? data : data.products || [];
+        const list = Array.isArray(data)
+          ? data
+          : data.items || data.products || [];
         setProductOptions(
           list.map((p: { id: string; name: string; sku?: string; brand?: { name: string } }) => ({
             value: p.id,

@@ -60,10 +60,10 @@ export default function NewContentIdeaPage() {
       });
 
     // Fetch campaigns
-    fetch("/api/campaigns")
+    fetch("/api/campaigns?limit=200")
       .then((r) => r.json())
       .then((data) => {
-        const list = data.campaigns || [];
+        const list = data.items || data.campaigns || [];
         setCampaignOptions(
           list.map(
             (c: {

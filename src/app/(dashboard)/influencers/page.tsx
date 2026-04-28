@@ -1,5 +1,5 @@
-export const dynamic = "force-dynamic";
-
+// export const dynamic = "force-dynamic";
+export const revalidate = 60;
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
