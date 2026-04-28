@@ -38,6 +38,7 @@ export default async function DiscoveredInfluencersPage() {
           select: { name: true, brand: { select: { name: true } } },
         },
       },
+      take: 100,
     }),
     prisma.discoveryBookmark.count({ where }),
   ]);
