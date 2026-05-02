@@ -80,8 +80,14 @@ export function InlineStatusSelect({
           }, 1500);
           return;
         }
-        if (data.transitionErrors && data.transitionErrors.length > 0) {
-          data.transitionErrors.forEach((err: string) => toast.error(err));
+        // API returns specific reasons in `details` (and historically `transitionErrors`).
+        // Show every reason so the user knows exactly what's blocking the transition.
+        const reasons: string[] = [
+          ...(Array.isArray(data.details) ? data.details : []),
+          ...(Array.isArray(data.transitionErrors) ? data.transitionErrors : []),
+        ];
+        if (reasons.length > 0) {
+          reasons.forEach((err: string) => toast.error(err));
           return;
         }
         throw new Error(data.error || "Failed to update status");

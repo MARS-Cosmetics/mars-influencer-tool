@@ -1,24 +1,66 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
+// =====================================================================
+// SCORING CONFIG — tune these to match what "good" looks like for the team
+// =====================================================================
+const TARGETS = {
+  // Reach: total views in period that scores 10/10
+  REACH_FOR_10: 5_000_000,
+  // Efficiency (CPV): linear from BEST (0/10 score off, 10/10 reward) to WORST
+  CPV_FOR_10: 0.05, // ₹0.05/view = perfect efficiency
+  CPV_FOR_0: 0.2, // ₹0.20/view = no efficiency credit
+  // Volume: collabs in period that score 10/10
+  VOLUME_FOR_10: 4,
+  // Weights (must sum to 1.0)
+  WEIGHTS: {
+    reach: 0.35,
+    efficiency: 0.25,
+    volume: 0.2,
+    quality: 0.2,
+  },
+  // Default scores when data is missing
+  EFFICIENCY_DEFAULT_FOR_BARTER: 5, // all-barter users → neutral, not 0
+  QUALITY_DEFAULT_NO_RATINGS: 5, // no content ratings logged → neutral
+};
+
 function getWeekBoundaries(date: Date): { start: Date; end: Date } {
   const d = new Date(date);
-  const day = d.getUTCDay(); // 0=Sun, 1=Mon, ...
+  const day = d.getUTCDay();
   const diffToMonday = day === 0 ? -6 : 1 - day;
   const monday = new Date(d);
   monday.setUTCDate(d.getUTCDate() + diffToMonday);
   monday.setUTCHours(0, 0, 0, 0);
-
   const nextMonday = new Date(monday);
   nextMonday.setUTCDate(monday.getUTCDate() + 7);
-
   return { start: monday, end: nextMonday };
 }
 
 function getMonthBoundaries(date: Date): { start: Date; end: Date } {
-  const start = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
-  const end = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1));
+  const start = new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1)
+  );
+  const end = new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1)
+  );
   return { start, end };
+}
+
+function median(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? (sorted[mid - 1] + sorted[mid]) / 2
+    : sorted[mid];
+}
+
+function clamp(n: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, n));
+}
+
+function round1(n: number): number {
+  return Math.round(n * 10) / 10;
 }
 
 export async function GET(request: NextRequest) {
@@ -26,33 +68,21 @@ export async function GET(request: NextRequest) {
     const { searchParams } = request.nextUrl;
     const period = searchParams.get("period") || "weekly";
     const dateParam = searchParams.get("date");
-
     const referenceDate = dateParam ? new Date(dateParam) : new Date();
-
     const { start, end } =
       period === "monthly"
         ? getMonthBoundaries(referenceDate)
         : getWeekBoundaries(referenceDate);
 
-    // Find collaborations that were first approved (content_approved) during this period.
-    // Strategy: use StatusTransition table to find the FIRST transition to content_approved.
-    // If no StatusTransition exists for a collaboration, fall back to collaboration.updatedAt.
-
-    // Step 1: Get all collaborations in qualifying statuses
+    // Pull all collabs in qualifying status with their data
     const collaborations = await prisma.collaboration.findMany({
-      where: {
-        status: { in: ["content_approved", "completed"] },
-      },
+      where: { status: { in: ["content_approved", "completed"] } },
       include: {
-        assignee: {
-          select: { id: true, name: true, email: true },
-        },
+        assignee: { select: { id: true, name: true, email: true } },
         influencer: {
           select: { id: true, name: true, instagramHandle: true },
         },
-        assets: {
-          select: { views: true },
-        },
+        assets: { select: { views: true, contentRating: true } },
         statusTransitions: {
           where: { toStatus: "content_approved" },
           orderBy: { createdAt: "asc" },
@@ -61,39 +91,32 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Step 2: Filter collaborations whose first content_approved date falls within the period
-    const qualifyingCollabs = collaborations.filter((collab) => {
-      let approvedDate: Date;
-
-      if (collab.statusTransitions.length > 0) {
-        approvedDate = collab.statusTransitions[0].createdAt;
-      } else {
-        // Fallback: use collaboration updatedAt
-        approvedDate = collab.updatedAt;
-      }
-
-      return approvedDate >= start && approvedDate < end;
+    // Filter to those approved in this period
+    const inPeriod = collaborations.filter((c) => {
+      const approvedAt =
+        c.statusTransitions.length > 0
+          ? c.statusTransitions[0].createdAt
+          : c.updatedAt;
+      return approvedAt >= start && approvedAt < end;
     });
 
-    // Step 3: Group by assignee and calculate scores
-    const userMap = new Map<
-      string,
-      {
-        userId: string;
-        userName: string;
-        userEmail: string;
-        totalViews: number;
-        collabCount: number;
-        cpvSum: number;
-        paidCollabCount: number;
-        allBarter: boolean;
-        topCollab: { handle: string; views: number } | null;
-      }
-    >();
+    // Group by user, aggregate per-collab data
+    type UserAgg = {
+      userId: string;
+      userName: string;
+      userEmail: string;
+      totalViews: number;
+      collabCount: number;
+      paidCPVs: number[]; // for median CPV
+      ratings: number[]; // content ratings across all assets
+      topCollab: { handle: string; views: number } | null;
+      totalSpent: number;
+      hasPaid: boolean;
+    };
+    const userMap = new Map<string, UserAgg>();
 
-    for (const collab of qualifyingCollabs) {
+    for (const collab of inPeriod) {
       const userId = collab.assignee.id;
-
       if (!userMap.has(userId)) {
         userMap.set(userId, {
           userId,
@@ -101,84 +124,123 @@ export async function GET(request: NextRequest) {
           userEmail: collab.assignee.email,
           totalViews: 0,
           collabCount: 0,
-          cpvSum: 0,
-          paidCollabCount: 0,
-          allBarter: true,
+          paidCPVs: [],
+          ratings: [],
           topCollab: null,
+          totalSpent: 0,
+          hasPaid: false,
         });
       }
+      const e = userMap.get(userId)!;
+      e.collabCount++;
 
-      const entry = userMap.get(userId)!;
-      entry.collabCount += 1;
-
-      // Sum views from assets
       const collabViews = collab.assets.reduce(
-        (sum, asset) => sum + (asset.views || 0),
+        (s, a) => s + (a.views || 0),
         0
       );
-      entry.totalViews += collabViews;
+      e.totalViews += collabViews;
 
-      // Track top collaboration by views
-      const handle = collab.influencer.instagramHandle || collab.influencer.name;
-      if (!entry.topCollab || collabViews > entry.topCollab.views) {
-        entry.topCollab = { handle, views: collabViews };
+      const handle =
+        collab.influencer.instagramHandle || collab.influencer.name;
+      if (!e.topCollab || collabViews > e.topCollab.views) {
+        e.topCollab = { handle, views: collabViews };
       }
 
-      // CPV calculation
-      const isPaid = collab.type === "paid";
-      if (isPaid && collab.agreedAmount) {
-        entry.allBarter = false;
+      // Per-collab CPV (paid only, with views)
+      if (collab.type === "paid" && collab.agreedAmount) {
+        e.hasPaid = true;
+        e.totalSpent += Number(collab.agreedAmount);
         if (collabViews > 0) {
-          const cpv = Number(collab.agreedAmount) / collabViews;
-          entry.cpvSum += cpv;
-          entry.paidCollabCount += 1;
+          e.paidCPVs.push(Number(collab.agreedAmount) / collabViews);
         }
       }
-      // barter: CPV = 0, contributes 0 to cpvSum but counts toward collabCount
+
+      // Collect ratings from assets
+      for (const a of collab.assets) {
+        if (a.contentRating != null) {
+          e.ratings.push(Number(a.contentRating));
+        }
+      }
     }
 
-    // Step 4: Calculate final scores and build leaderboard
+    // Calculate component scores per user
     const leaderboard = Array.from(userMap.values())
-      .map((entry) => {
-        const avgCPV =
-          entry.paidCollabCount > 0
-            ? entry.cpvSum / entry.paidCollabCount
-            : 0;
+      .map((e) => {
+        // 1. REACH (0–10) — linear from 0 to TARGETS.REACH_FOR_10
+        const reachScore = clamp(
+          (e.totalViews / TARGETS.REACH_FOR_10) * 10,
+          0,
+          10
+        );
 
-        // Score = (totalViews / avgCPV) * collabCount
-        // If avgCPV is 0 (all barter), the views/CPV ratio contributes 0
-        const viewsCpvRatio = avgCPV > 0 ? entry.totalViews / avgCPV : 0;
-        const score = viewsCpvRatio * entry.collabCount;
+        // 2. EFFICIENCY (0–10) — uses median CPV; barter-only → neutral
+        const medianCPV = median(e.paidCPVs);
+        let efficiencyScore: number;
+        if (!e.hasPaid) {
+          efficiencyScore = TARGETS.EFFICIENCY_DEFAULT_FOR_BARTER;
+        } else if (medianCPV <= 0) {
+          efficiencyScore = TARGETS.EFFICIENCY_DEFAULT_FOR_BARTER;
+        } else {
+          // Linear: CPV_FOR_10 → 10, CPV_FOR_0 → 0
+          const span = TARGETS.CPV_FOR_0 - TARGETS.CPV_FOR_10;
+          const fromBest = medianCPV - TARGETS.CPV_FOR_10;
+          efficiencyScore = clamp(10 - (fromBest / span) * 10, 0, 10);
+        }
+
+        // 3. VOLUME (0–10) — linear, capped at TARGETS.VOLUME_FOR_10
+        const volumeScore = clamp(
+          (e.collabCount / TARGETS.VOLUME_FOR_10) * 10,
+          0,
+          10
+        );
+
+        // 4. QUALITY (0–10) — avg content rating × 2; if none, neutral
+        const qualityScore =
+          e.ratings.length > 0
+            ? clamp(
+                (e.ratings.reduce((s, r) => s + r, 0) / e.ratings.length) * 2,
+                0,
+                10
+              )
+            : TARGETS.QUALITY_DEFAULT_NO_RATINGS;
+
+        // Final weighted score
+        const score =
+          TARGETS.WEIGHTS.reach * reachScore +
+          TARGETS.WEIGHTS.efficiency * efficiencyScore +
+          TARGETS.WEIGHTS.volume * volumeScore +
+          TARGETS.WEIGHTS.quality * qualityScore;
 
         return {
-          userId: entry.userId,
-          userName: entry.userName,
-          userEmail: entry.userEmail,
-          score: Math.round(score * 100) / 100,
-          totalViews: entry.totalViews,
-          collabCount: entry.collabCount,
-          avgCPV: Math.round(avgCPV * 100) / 100,
-          allBarter: entry.allBarter,
-          topCollaboration: entry.topCollab
-            ? entry.topCollab.handle
-            : null,
+          userId: e.userId,
+          userName: e.userName,
+          userEmail: e.userEmail,
+          score: round1(score),
+          components: {
+            reach: round1(reachScore),
+            efficiency: round1(efficiencyScore),
+            volume: round1(volumeScore),
+            quality: round1(qualityScore),
+          },
+          totalViews: e.totalViews,
+          collabCount: e.collabCount,
+          medianCPV: Math.round(medianCPV * 100) / 100,
+          totalSpent: Math.round(e.totalSpent * 100) / 100,
+          allBarter: !e.hasPaid,
+          hasRatings: e.ratings.length > 0,
+          topCollaboration: e.topCollab ? e.topCollab.handle : null,
         };
       })
       .sort((a, b) => b.score - a.score)
-      .map((entry, index) => ({
-        rank: index + 1,
-        ...entry,
-      }));
+      .map((entry, index) => ({ rank: index + 1, ...entry }));
 
-    // Summary stats
-    const totalCollaborations = qualifyingCollabs.length;
+    // Summary
+    const totalCollaborations = inPeriod.length;
     const totalViews = leaderboard.reduce((s, e) => s + e.totalViews, 0);
-    const totalAvgCPV =
-      leaderboard.filter((e) => !e.allBarter).length > 0
-        ? leaderboard
-            .filter((e) => !e.allBarter)
-            .reduce((s, e) => s + e.avgCPV, 0) /
-          leaderboard.filter((e) => !e.allBarter).length
+    const paidUsers = leaderboard.filter((e) => !e.allBarter);
+    const avgCPV =
+      paidUsers.length > 0
+        ? paidUsers.reduce((s, e) => s + e.medianCPV, 0) / paidUsers.length
         : 0;
     const topPerformer = leaderboard.length > 0 ? leaderboard[0] : null;
 
@@ -186,10 +248,15 @@ export async function GET(request: NextRequest) {
       period,
       periodStart: start.toISOString(),
       periodEnd: end.toISOString(),
+      scoring: {
+        formula:
+          "weighted: 35% reach + 25% efficiency + 20% volume + 20% quality, each 0–10",
+        targets: TARGETS,
+      },
       summary: {
         totalCollaborations,
         totalViews,
-        avgCPV: Math.round(totalAvgCPV * 100) / 100,
+        avgCPV: Math.round(avgCPV * 100) / 100,
         topPerformer: topPerformer
           ? { name: topPerformer.userName, score: topPerformer.score }
           : null,

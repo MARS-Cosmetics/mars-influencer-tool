@@ -24,6 +24,13 @@ import {
   SearchableSelect,
   type SearchableSelectOption,
 } from "@/components/searchable-select";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 function formatCount(n: number | null | undefined): string {
   if (n == null) return "";
@@ -117,6 +124,10 @@ export default function NewCollaborationPage() {
 
   const [influencerOptions, setInfluencerOptions] = useState<SearchableSelectOption[]>([]);
   const [brandOptions, setBrandOptions] = useState<SearchableSelectOption[]>([]);
+  const [showCreateBrand, setShowCreateBrand] = useState(false);
+  const [newBrandName, setNewBrandName] = useState("");
+  const [newBrandSlug, setNewBrandSlug] = useState("");
+  const [creatingBrand, setCreatingBrand] = useState(false);
   const [campaignOptions, setCampaignOptions] = useState<SearchableSelectOption[]>([]);
   const [userOptions, setUserOptions] = useState<SearchableSelectOption[]>([]);
   const [productOptions, setProductOptions] = useState<SearchableSelectOption[]>([]);
@@ -162,6 +173,59 @@ export default function NewCollaborationPage() {
 
   const [formErrors, setFormErrors] = useState<Record<string, boolean>>({});
 
+  async function refreshBrands(selectId?: string) {
+    try {
+      const res = await fetch("/api/brands");
+      const data = await res.json();
+      const list = data.brands || [];
+      const opts = list.map((b: { id: string; name: string }) => ({
+        value: b.id,
+        label: b.name,
+      }));
+      setBrandOptions(opts);
+      if (selectId) {
+        setForm((prev) => ({ ...prev, brandId: selectId }));
+      } else if (opts.length > 0) {
+        setForm((prev) => (prev.brandId ? prev : { ...prev, brandId: opts[0].value }));
+      }
+    } catch {
+      toast.error("Failed to load brands");
+    }
+  }
+
+  async function createBrand() {
+    const name = newBrandName.trim();
+    if (!name) {
+      toast.error("Brand name is required");
+      return;
+    }
+    setCreatingBrand(true);
+    try {
+      const res = await fetch("/api/brands", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          slug: newBrandSlug.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to create brand");
+      }
+      toast.success(`Brand "${data.name}" created`);
+      setShowCreateBrand(false);
+      setNewBrandName("");
+      setNewBrandSlug("");
+      // Refetch + auto-select the newly created brand
+      await refreshBrands(data.id);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to create brand");
+    } finally {
+      setCreatingBrand(false);
+    }
+  }
+
   useEffect(() => {
     // Fetch influencers
     fetch("/api/influencers?limit=500")
@@ -185,20 +249,7 @@ export default function NewCollaborationPage() {
       });
 
     // Fetch brands and auto-select first
-    fetch("/api/brands")
-      .then((r) => r.json())
-      .then((data) => {
-        const list = data.brands || [];
-        const opts = list.map((b: { id: string; name: string }) => ({
-          value: b.id,
-          label: b.name,
-        }));
-        setBrandOptions(opts);
-        // Auto-select first brand
-        if (opts.length > 0) {
-          setForm((prev) => ({ ...prev, brandId: opts[0].value }));
-        }
-      });
+    refreshBrands();
 
     // Fetch campaigns (API returns { items, total, ... })
     fetch("/api/campaigns?limit=200")
@@ -758,15 +809,37 @@ export default function NewCollaborationPage() {
             </div>
 
             <div className="space-y-2">
-              <div className="flex items-center gap-1 text-sm font-medium">Brand <span className="text-red-500">*</span></div>
-              <SearchableSelect
-                options={brandOptions}
-                value={form.brandId}
-                onChange={(v) => setField("brandId", v)}
-                placeholder="Select brand..."
-                searchPlaceholder="Search brands..."
-                className={formErrors.brandId ? "ring-2 ring-red-500 rounded-lg" : ""}
-              />
+              <div className="flex items-center gap-1 text-sm font-medium">
+                Brand <span className="text-red-500">*</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex-1">
+                  <SearchableSelect
+                    options={brandOptions}
+                    value={form.brandId}
+                    onChange={(v) => setField("brandId", v)}
+                    placeholder={
+                      brandOptions.length === 0
+                        ? "No brands yet — create one →"
+                        : "Select brand..."
+                    }
+                    searchPlaceholder="Search brands..."
+                    className={
+                      formErrors.brandId ? "ring-2 ring-red-500 rounded-lg" : ""
+                    }
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowCreateBrand(true)}
+                  title="Create new brand"
+                >
+                  <Plus className="size-4" />
+                  New
+                </Button>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -1219,6 +1292,69 @@ export default function NewCollaborationPage() {
           </Button>
         </div>
       </form>
+
+      <Dialog
+        open={showCreateBrand}
+        onOpenChange={(o) => {
+          if (!o) {
+            setShowCreateBrand(false);
+            setNewBrandName("");
+            setNewBrandSlug("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create new brand</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label htmlFor="newBrandName">Name *</Label>
+              <Input
+                id="newBrandName"
+                value={newBrandName}
+                onChange={(e) => setNewBrandName(e.target.value)}
+                placeholder="e.g. MARS Cosmetics"
+                autoFocus
+              />
+            </div>
+            <div>
+              <Label htmlFor="newBrandSlug">
+                Slug (optional)
+                <span className="ml-1 text-xs font-normal text-muted-foreground">
+                  — auto-generated from name if empty
+                </span>
+              </Label>
+              <Input
+                id="newBrandSlug"
+                value={newBrandSlug}
+                onChange={(e) => setNewBrandSlug(e.target.value)}
+                placeholder="e.g. mars-cosmetics"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowCreateBrand(false)}
+              disabled={creatingBrand}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={createBrand}
+              disabled={creatingBrand || !newBrandName.trim()}
+            >
+              {creatingBrand && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

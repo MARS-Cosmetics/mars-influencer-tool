@@ -11,9 +11,9 @@ const globalForPrisma = globalThis as unknown as {
 function createPrismaClient() {
   const pool = new Pool({
     connectionString,
-    max: 10, // max connections in pool
-    idleTimeoutMillis: 30000, // close idle connections after 30s
-    connectionTimeoutMillis: 5000, // fail fast if can't connect in 5s
+    max: 25, // max connections in pool
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 30000, // tolerate Neon cold starts during build
   });
   const adapter = new PrismaPg(pool);
   return new PrismaClient({ adapter });

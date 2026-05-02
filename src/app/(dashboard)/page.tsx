@@ -1,4 +1,4 @@
-export const revalidate = 60;
+export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,6 +13,7 @@ import {
   ArrowUpRight,
 } from "lucide-react";
 import Link from "next/link";
+import { PendingWork } from "./pending-work";
 
 async function getStats() {
   const [
@@ -182,6 +183,9 @@ export default async function DashboardPage() {
           </Link>
         ))}
       </div>
+
+      {/* Per-user pending work — fetched client-side via SWR (session-specific, can't be ISR'd) */}
+      <PendingWork />
 
       {/* Recent Collaborations */}
       <div>

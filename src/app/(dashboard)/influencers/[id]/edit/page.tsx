@@ -23,15 +23,6 @@ type InfluencerData = Record<string, unknown>;
 
 const selectClass = "flex h-9 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
-function formatMetric(n: string | number | null | undefined): string {
-  if (n == null || n === "") return "-";
-  const num = typeof n === "string" ? parseFloat(n) : n;
-  if (isNaN(num)) return "-";
-  if (num >= 1_000_000) return (num / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
-  if (num >= 1_000) return (num / 1_000).toFixed(1).replace(/\.0$/, "") + "K";
-  return num.toString();
-}
-
 export default function EditInfluencerPage() {
   const params = useParams();
   const router = useRouter();
@@ -320,7 +311,6 @@ export default function EditInfluencerPage() {
   }
 
   const selectedLanguages = form.languages ? form.languages.split(",").map((s) => s.trim()).filter(Boolean) : [];
-  const hasMetrics = Boolean(form.igFollowerCount);
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -486,84 +476,169 @@ export default function EditInfluencerPage() {
           </CardContent>
         </Card>
 
-        {/* Instagram Metrics (via CultureX) */}
-        {hasMetrics && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Instagram Metrics (via CultureX)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
-                <div>
-                  <p className="text-xs text-muted-foreground">Followers</p>
-                  <p className="text-sm font-medium">{formatMetric(form.igFollowerCount)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Following</p>
-                  <p className="text-sm font-medium">{formatMetric(form.igFollowingCount)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Posts</p>
-                  <p className="text-sm font-medium">{formatMetric(form.igPostCount)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Engagement Rate</p>
-                  <p className="text-sm font-medium">{form.igEngagementRate ? `${form.igEngagementRate}%` : "-"}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Avg Likes</p>
-                  <p className="text-sm font-medium">{formatMetric(form.igAvgLikes)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Avg Comments</p>
-                  <p className="text-sm font-medium">{formatMetric(form.igAvgComments)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Avg Reel Views</p>
-                  <p className="text-sm font-medium">{formatMetric(form.igAvgReelViews)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Avg Story Views</p>
-                  <p className="text-sm font-medium">{formatMetric(form.igAvgStoryViews)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Median Reel Views</p>
-                  <p className="text-sm font-medium">{formatMetric(form.igMedianReelViews)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Credibility Score</p>
-                  <p className="text-sm font-medium">{form.igCredibilityScore || "-"}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Audience Male %</p>
-                  <p className="text-sm font-medium">{form.igAudienceMalePct ? `${form.igAudienceMalePct}%` : "-"}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Audience Female %</p>
-                  <p className="text-sm font-medium">{form.igAudienceFemalePct ? `${form.igAudienceFemalePct}%` : "-"}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Top Age Range</p>
-                  <p className="text-sm font-medium">{form.igAudienceTopAgeRange || "-"}</p>
-                </div>
+        {/* Instagram Metrics — auto-fetched via CultureX, manually editable as fallback */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Instagram Metrics</CardTitle>
+            <p className="text-xs text-muted-foreground mt-1">
+              Auto-filled by the &quot;Fetch&quot; button above. If CultureX has no data, you can enter values manually below — they save with the rest of the form.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
+              <div className="space-y-1">
+                <Label htmlFor="igFollowerCount" className="text-xs text-muted-foreground">Followers</Label>
+                <Input
+                  id="igFollowerCount"
+                  name="igFollowerCount"
+                  type="number"
+                  min="0"
+                  value={form.igFollowerCount}
+                  onChange={handleInputChange}
+                  placeholder="e.g. 50000"
+                />
               </div>
-              {/* Hidden inputs so metrics get submitted */}
-              <input type="hidden" name="igFollowerCount" value={form.igFollowerCount} />
-              <input type="hidden" name="igFollowingCount" value={form.igFollowingCount} />
-              <input type="hidden" name="igPostCount" value={form.igPostCount} />
-              <input type="hidden" name="igEngagementRate" value={form.igEngagementRate} />
-              <input type="hidden" name="igAvgLikes" value={form.igAvgLikes} />
-              <input type="hidden" name="igAvgComments" value={form.igAvgComments} />
-              <input type="hidden" name="igAvgReelViews" value={form.igAvgReelViews} />
-              <input type="hidden" name="igAvgStoryViews" value={form.igAvgStoryViews} />
-              <input type="hidden" name="igMedianReelViews" value={form.igMedianReelViews} />
-              <input type="hidden" name="igCredibilityScore" value={form.igCredibilityScore} />
-              <input type="hidden" name="igAudienceMalePct" value={form.igAudienceMalePct} />
-              <input type="hidden" name="igAudienceFemalePct" value={form.igAudienceFemalePct} />
-              <input type="hidden" name="igAudienceTopAgeRange" value={form.igAudienceTopAgeRange} />
-            </CardContent>
-          </Card>
-        )}
+              <div className="space-y-1">
+                <Label htmlFor="igFollowingCount" className="text-xs text-muted-foreground">Following</Label>
+                <Input
+                  id="igFollowingCount"
+                  name="igFollowingCount"
+                  type="number"
+                  min="0"
+                  value={form.igFollowingCount}
+                  onChange={handleInputChange}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="igPostCount" className="text-xs text-muted-foreground">Posts</Label>
+                <Input
+                  id="igPostCount"
+                  name="igPostCount"
+                  type="number"
+                  min="0"
+                  value={form.igPostCount}
+                  onChange={handleInputChange}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="igEngagementRate" className="text-xs text-muted-foreground">Engagement Rate (%)</Label>
+                <Input
+                  id="igEngagementRate"
+                  name="igEngagementRate"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.igEngagementRate}
+                  onChange={handleInputChange}
+                  placeholder="e.g. 3.50"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="igAvgLikes" className="text-xs text-muted-foreground">Avg Likes</Label>
+                <Input
+                  id="igAvgLikes"
+                  name="igAvgLikes"
+                  type="number"
+                  min="0"
+                  value={form.igAvgLikes}
+                  onChange={handleInputChange}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="igAvgComments" className="text-xs text-muted-foreground">Avg Comments</Label>
+                <Input
+                  id="igAvgComments"
+                  name="igAvgComments"
+                  type="number"
+                  min="0"
+                  value={form.igAvgComments}
+                  onChange={handleInputChange}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="igAvgReelViews" className="text-xs text-muted-foreground">Avg Reel Views</Label>
+                <Input
+                  id="igAvgReelViews"
+                  name="igAvgReelViews"
+                  type="number"
+                  min="0"
+                  value={form.igAvgReelViews}
+                  onChange={handleInputChange}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="igAvgStoryViews" className="text-xs text-muted-foreground">Avg Story Views</Label>
+                <Input
+                  id="igAvgStoryViews"
+                  name="igAvgStoryViews"
+                  type="number"
+                  min="0"
+                  value={form.igAvgStoryViews}
+                  onChange={handleInputChange}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="igMedianReelViews" className="text-xs text-muted-foreground">Median Reel Views</Label>
+                <Input
+                  id="igMedianReelViews"
+                  name="igMedianReelViews"
+                  type="number"
+                  min="0"
+                  value={form.igMedianReelViews}
+                  onChange={handleInputChange}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="igCredibilityScore" className="text-xs text-muted-foreground">Credibility Score</Label>
+                <Input
+                  id="igCredibilityScore"
+                  name="igCredibilityScore"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.igCredibilityScore}
+                  onChange={handleInputChange}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="igAudienceMalePct" className="text-xs text-muted-foreground">Audience Male (%)</Label>
+                <Input
+                  id="igAudienceMalePct"
+                  name="igAudienceMalePct"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  value={form.igAudienceMalePct}
+                  onChange={handleInputChange}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="igAudienceFemalePct" className="text-xs text-muted-foreground">Audience Female (%)</Label>
+                <Input
+                  id="igAudienceFemalePct"
+                  name="igAudienceFemalePct"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  value={form.igAudienceFemalePct}
+                  onChange={handleInputChange}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="igAudienceTopAgeRange" className="text-xs text-muted-foreground">Top Age Range</Label>
+                <Input
+                  id="igAudienceTopAgeRange"
+                  name="igAudienceTopAgeRange"
+                  value={form.igAudienceTopAgeRange}
+                  onChange={handleInputChange}
+                  placeholder="e.g. 25-34"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Location */}
         <Card>
