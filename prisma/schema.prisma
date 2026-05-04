@@ -1312,3 +1312,90 @@ model TelegramSession {
 
   @@map("telegram_sessions")
 }
+
+// ============================================================
+// DOCUMENT STORAGE — KYC docs, contracts, etc. on Cloudflare R2
+// ============================================================
+
+enum DocumentStatus {
+  active
+  superseded
+  revoked
+  deleted
+}
+
+enum DocumentVerificationStatus {
+  pending
+  verified
+  rejected
+}
+
+enum DocumentAccessAction {
+  view
+  download
+  denied
+  revoked
+}
+
+model DocumentRecord {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  // Polymorphic owner: "agency" | "influencer" | "contract" | "invoice" | etc.
+  entityType    String   @map("entity_type")
+  entityId      String   @map("entity_id") @db.Uuid
+
+  // Document classification: "aadhar" | "pan" | "gst" | "udhyam" | "roster" | "bank_proof" | "other"
+  documentType  String   @map("document_type")
+
+  // Storage
+  bucket        String
+  storageKey    String   @unique @map("storage_key")
+
+  // Metadata captured at upload
+  originalFilename String  @map("original_filename")
+  mimeType         String  @map("mime_type")
+  sizeBytes        Int     @map("size_bytes") @default(0)
+
+  // Audit
+  uploadedBy   String   @map("uploaded_by") @db.Uuid
+  uploadedAt   DateTime @default(now()) @map("uploaded_at") @db.Timestamptz()
+
+  // Lifecycle
+  status        DocumentStatus @default(active)
+  supersededBy  String?  @map("superseded_by") @db.Uuid
+  supersededAt  DateTime? @map("superseded_at") @db.Timestamptz()
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz()
+  revokedAt     DateTime? @map("revoked_at") @db.Timestamptz()
+  revokedBy     String?   @map("revoked_by") @db.Uuid
+  revokeReason  String?   @map("revoke_reason")
+
+  // KYC verification workflow
+  verificationStatus DocumentVerificationStatus @default(pending) @map("verification_status")
+  verifiedBy         String?   @map("verified_by") @db.Uuid
+  verifiedAt         DateTime? @map("verified_at") @db.Timestamptz()
+  rejectionReason    String?   @map("rejection_reason")
+
+  // Audit log relation
+  accessLogs    DocumentAccessLog[]
+
+  @@index([entityType, entityId, documentType, status])
+  @@index([uploadedBy])
+  @@index([status])
+  @@map("document_records")
+}
+
+model DocumentAccessLog {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  documentId   String   @map("document_id") @db.Uuid
+  userId       String?  @map("user_id") @db.Uuid
+  action       DocumentAccessAction
+  ipAddress    String?  @map("ip_address")
+  userAgent    String?  @map("user_agent")
+  accessedAt   DateTime @default(now()) @map("accessed_at") @db.Timestamptz()
+
+  document     DocumentRecord @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId, accessedAt])
+  @@index([userId, accessedAt])
+  @@map("document_access_log")
+}

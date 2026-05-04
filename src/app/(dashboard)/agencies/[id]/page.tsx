@@ -23,6 +23,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { AgencyDocumentsCard } from "./documents-card";
+import type { UploadedDoc } from "@/components/document-upload";
 
 export default async function AgencyDetailPage({
   params,
@@ -42,6 +44,25 @@ export default async function AgencyDetailPage({
 
   if (!agency) {
     notFound();
+  }
+
+  // Fetch active documents for this agency, grouped by documentType
+  const activeDocs = await prisma.documentRecord.findMany({
+    where: { entityType: "agency", entityId: id, status: "active" },
+    select: { id: true, documentType: true, originalFilename: true, uploadedAt: true },
+    orderBy: { uploadedAt: "desc" },
+  });
+  const initialDocs: Record<string, UploadedDoc | null> = {
+    aadhar: null, pan: null, gst: null, udhyam: null, roster: null,
+  };
+  for (const d of activeDocs) {
+    if (initialDocs[d.documentType] === null) {
+      initialDocs[d.documentType] = {
+        id: d.id,
+        filename: d.originalFilename,
+        uploadedAt: d.uploadedAt.toISOString(),
+      };
+    }
   }
 
   return (
@@ -211,6 +232,8 @@ export default async function AgencyDetailPage({
           )}
         </CardContent>
       </Card>
+
+      <AgencyDocumentsCard agencyId={id} initialDocs={initialDocs} />
     </div>
   );
 }

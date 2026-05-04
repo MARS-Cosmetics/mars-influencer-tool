@@ -17,6 +17,8 @@ import { Button } from "@/components/ui/button";
 import { Plus, Search } from "lucide-react";
 import { InfluencerFilters } from "./influencer-filters";
 import { InfluencerTabs } from "./influencer-tabs";
+import { BulkImportDialog } from "./bulk-import-dialog";
+import { ExportMenu } from "./export-menu";
 
 function formatCount(n: number | null | undefined): string {
   if (n == null) return "-";
@@ -127,12 +129,16 @@ export default async function InfluencersPage({
             {total} influencer{total !== 1 ? "s" : ""} found
           </p>
         </div>
-        <Link href="/influencers/new">
-          <Button>
-            <Plus className="size-4" />
-            Add Influencer
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <ExportMenu />
+          <BulkImportDialog />
+          <Link href="/influencers/new">
+            <Button>
+              <Plus className="size-4" />
+              Add Influencer
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <InfluencerTabs discoveredCount={discoveredCount} />

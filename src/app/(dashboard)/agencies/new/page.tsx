@@ -162,14 +162,7 @@ export default function NewAgencyPage() {
 
     setLoading(true);
     try {
-      const payload = {
-        ...form,
-        panDocumentUrl: files.panDocumentUrl.url || null,
-        gstDocumentUrl: files.gstDocumentUrl.url || null,
-        udhyamCertificateUrl: files.udhyamCertificateUrl.url || null,
-        agencyRosterUrl: files.agencyRosterUrl.url || null,
-        aadharDocumentUrl: files.aadharDocumentUrl.url || null,
-      };
+      const payload = { ...form };
 
       const res = await fetch("/api/agencies", {
         method: "POST",
@@ -178,8 +171,9 @@ export default function NewAgencyPage() {
       });
 
       if (!res.ok) throw new Error("Failed to create agency");
-      toast.success("Agency created successfully!");
-      router.push("/agencies");
+      const created = await res.json();
+      toast.success("Agency created. Now upload its documents.");
+      router.push(`/agencies/${created.id}`);
     } catch {
       toast.error("Failed to create agency.");
     } finally {
@@ -392,12 +386,13 @@ export default function NewAgencyPage() {
               </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              <FileUploadField field="panDocumentUrl" label="PAN Document" />
-              <FileUploadField field="gstDocumentUrl" label="GST Certificate" />
-              <FileUploadField field="udhyamCertificateUrl" label="Udhyam Certificate" />
-              <FileUploadField field="aadharDocumentUrl" label="Director/Partner Aadhar" />
-              <FileUploadField field="agencyRosterUrl" label="Agency Roster File" />
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+              <p className="font-medium">Documents are uploaded on the next step.</p>
+              <p className="mt-1 text-blue-800">
+                Save the agency first, then you&apos;ll be taken to its detail page where you can
+                upload Aadhar, PAN, GST, Udhyam, and Roster documents securely (stored on
+                Cloudflare R2).
+              </p>
             </div>
           </CardContent>
         </Card>
