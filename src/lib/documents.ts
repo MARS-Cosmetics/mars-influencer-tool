@@ -60,6 +60,8 @@ export const DOCUMENT_TYPE_CONFIG: Record<DocumentType, DocumentTypeConfig> = {
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "application/vnd.ms-excel",
       "text/csv",
+      "image/jpeg",
+      "image/png",
     ],
   },
   bank_proof: {
@@ -142,6 +144,26 @@ export function validateUploadRequest(args: {
 // Operations
 // ============================================================
 
+async function fetchEntityName(
+  entityType: EntityType,
+  entityId: string,
+): Promise<string | null> {
+  try {
+    if (entityType === "agency") {
+      const a = await prisma.agency.findUnique({ where: { id: entityId }, select: { name: true } });
+      return a?.name ?? null;
+    }
+    if (entityType === "influencer") {
+      const i = await prisma.influencer.findUnique({ where: { id: entityId }, select: { name: true } });
+      return i?.name ?? null;
+    }
+    // Other entity types fall through; UUID-only path is fine for them
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Step 1 of upload: create a pending DocumentRecord and a presigned PUT URL.
  * The record is created first so we can track the intent even if the upload
@@ -157,9 +179,13 @@ export async function beginUpload(args: {
   size: number;
   uploadedBy: string;
 }): Promise<{ documentId: string; storageKey: string; uploadUrl: string }> {
+  // Look up entity name to embed in the R2 path for human-readable navigation
+  const entityName = await fetchEntityName(args.entityType, args.entityId);
+
   const storageKey = buildKey({
     entityType: args.entityType,
     entityId: args.entityId,
+    entityName: entityName ?? undefined,
     documentType: args.documentType,
     filename: args.filename,
   });

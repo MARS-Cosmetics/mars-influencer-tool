@@ -47,24 +47,38 @@ export function bucket(): string {
 
 /**
  * Build a deterministic, safe object key for the bucket.
- * Format: `{entityType}s/{entityId}/{documentType}/{uuid}.{ext}`
- *   e.g. `agencies/abc-123/aadhar/d4e5f6.pdf`
+ * Format: `{entityType}s/{slug}-{shortId}/{documentType}/{uuid}.{ext}`
+ *   e.g. `agencies/glamhouse-talent-50bd76f0/aadhar/d4e5f6.pdf`
  *
- * UUID prevents filename collisions and path traversal. Original filename
- * is stored in DB, never in the key.
+ * - `slug` makes the path human-readable in the R2 dashboard.
+ * - `shortId` (first 8 chars of the entityId) keeps it unique across same-named entities.
+ * - File-name UUID prevents collisions; original filename is stored in DB.
  */
 export function buildKey(args: {
   entityType: string;
   entityId: string;
+  entityName?: string;
   documentType: string;
   filename: string;
 }): string {
-  const { entityType, entityId, documentType, filename } = args;
+  const { entityType, entityId, entityName, documentType, filename } = args;
   const ext = (filename.match(/\.([a-zA-Z0-9]{1,8})$/)?.[1] ?? "bin").toLowerCase();
   const uuid = randomUUID();
-  // Pluralize entity type so paths read naturally
   const folder = `${entityType.toLowerCase()}s`;
-  return `${folder}/${entityId}/${documentType}/${uuid}.${ext}`;
+  const slug = entityName ? slugify(entityName) : "";
+  const shortId = entityId.slice(0, 8);
+  const folderName = slug ? `${slug}-${shortId}` : entityId;
+  return `${folder}/${folderName}/${documentType}/${uuid}.${ext}`;
+}
+
+function slugify(input: string): string {
+  return input
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "") // strip accents
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
 }
 
 // ============================================================

@@ -3,7 +3,29 @@
 import { useState, useRef } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Upload, Loader2, FileText, ExternalLink, Trash2, CheckCircle2 } from "lucide-react";
+import { Loader2, FileText, ExternalLink, Trash2, CheckCircle2 } from "lucide-react";
+
+const MIME_LABELS: Record<string, string> = {
+  "application/pdf": "PDF",
+  "image/jpeg": "JPG",
+  "image/png": "PNG",
+  "image/webp": "WebP",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "XLSX",
+  "application/vnd.ms-excel": "XLS",
+  "text/csv": "CSV",
+};
+
+function acceptHumanReadable(accept: string): string {
+  const labels = accept
+    .split(",")
+    .map((m) => m.trim())
+    .map((m) => MIME_LABELS[m] ?? m)
+    .filter(Boolean);
+  // de-duplicate while preserving order
+  const seen = new Set<string>();
+  const unique = labels.filter((l) => (seen.has(l) ? false : (seen.add(l), true)));
+  return unique.join(", ") || "Any file";
+}
 
 export interface UploadedDoc {
   id: string;            // DocumentRecord.id
@@ -175,7 +197,7 @@ export function DocumentUpload({
           {busy === "uploading" && <Loader2 className="size-4 animate-spin shrink-0" />}
         </div>
         <p className="text-[11px] text-muted-foreground">
-          PDF, JPG, or PNG. Max {maxSizeMB} MB. Stored securely; only authorized users can view.
+          {acceptHumanReadable(accept)}. Max {maxSizeMB} MB. Stored securely; only authorized users can view.
         </p>
       </div>
     </div>
