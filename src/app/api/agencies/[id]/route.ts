@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { auth } from "@/lib/auth";
+import { logFieldDiffs, logDelete } from "@/lib/activity-log";
 
 export async function GET(
   _request: Request,
@@ -38,6 +40,8 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await auth();
+    const userId = (session?.user as { id?: string } | undefined)?.id ?? null;
     const { id } = await params;
     const body = await request.json();
 
@@ -65,24 +69,14 @@ export async function PUT(
       },
     });
 
-    const trackFields = ["name", "commissionPct", "isActive"];
-    for (const field of trackFields) {
-      const oldVal = String((previous as any)?.[field] ?? "");
-      const newVal = String((agency as any)[field] ?? "");
-      if (oldVal !== newVal) {
-        await prisma.activityLog.create({
-          data: {
-            entityType: "agency",
-            entityId: id,
-            action: "field_update",
-            field,
-            oldValue: oldVal,
-            newValue: newVal,
-            description: `${field} updated`,
-          },
-        });
-      }
-    }
+    void logFieldDiffs(
+      userId,
+      "agency",
+      id,
+      previous as Record<string, unknown> | null,
+      agency as unknown as Record<string, unknown>,
+      ["name", "commissionPct", "isActive"],
+    );
 
     return NextResponse.json(agency);
   } catch (error) {
@@ -99,20 +93,17 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await auth();
+    const userId = (session?.user as { id?: string } | undefined)?.id ?? null;
     const { id } = await params;
-    await prisma.agency.update({
+
+    const agency = await prisma.agency.update({
       where: { id },
       data: { isActive: false },
+      select: { name: true },
     });
 
-    await prisma.activityLog.create({
-      data: {
-        entityType: "agency",
-        entityId: id,
-        action: "deleted",
-        description: `Agency deleted/deactivated`,
-      },
-    });
+    void logDelete(userId, "agency", id, `Deactivated agency: ${agency.name}`);
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -1165,6 +1165,8 @@ model ActivityLog {
 
   @@index([entityType, entityId])
   @@index([userId])
+  @@index([createdAt])
+  @@index([userId, createdAt])
   @@map("activity_log")
 }
 

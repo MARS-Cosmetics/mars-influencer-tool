@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { Prisma } from "@/generated/prisma";
+import { auth } from "@/lib/auth";
+import { logFieldDiffs, logDelete } from "@/lib/activity-log";
 
 export async function GET(
   _request: NextRequest,
@@ -171,24 +173,17 @@ export async function PUT(
       data: body,
     });
 
-    const trackFields = ["name", "email", "instagramHandle", "tier", "status"];
-    for (const field of trackFields) {
-      const oldVal = String((previous as any)?.[field] ?? "");
-      const newVal = String((influencer as any)[field] ?? "");
-      if (oldVal !== newVal) {
-        await prisma.activityLog.create({
-          data: {
-            entityType: "influencer",
-            entityId: id,
-            action: field === "status" ? "status_change" : field === "tier" ? "status_change" : "field_update",
-            field,
-            oldValue: oldVal,
-            newValue: newVal,
-            description: `${field} updated`,
-          },
-        });
-      }
-    }
+    const session = await auth();
+    const userId = (session?.user as { id?: string } | undefined)?.id ?? null;
+
+    void logFieldDiffs(
+      userId,
+      "influencer",
+      id,
+      previous as Record<string, unknown> | null,
+      influencer as unknown as Record<string, unknown>,
+      ["name", "email", "instagramHandle", "tier", "status"],
+    );
 
     return NextResponse.json(influencer);
   } catch (error) {
@@ -208,19 +203,16 @@ export async function DELETE(
   try {
     const { id } = await params;
 
-    await prisma.influencer.update({
+    const session = await auth();
+    const userId = (session?.user as { id?: string } | undefined)?.id ?? null;
+
+    const inf = await prisma.influencer.update({
       where: { id },
       data: { status: "inactive" },
+      select: { name: true },
     });
 
-    await prisma.activityLog.create({
-      data: {
-        entityType: "influencer",
-        entityId: id,
-        action: "deleted",
-        description: `Influencer deleted/deactivated`,
-      },
-    });
+    void logDelete(userId, "influencer", id, `Deactivated influencer: ${inf.name}`);
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { auth } from "@/lib/auth";
+import { logCreate } from "@/lib/activity-log";
 
 export async function GET(request: Request) {
   try {
@@ -54,6 +56,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const session = await auth();
+    const userId = (session?.user as { id?: string } | undefined)?.id ?? null;
     const body = await request.json();
 
     const campaign = await prisma.campaign.create({
@@ -72,14 +76,7 @@ export async function POST(request: Request) {
       include: { brand: true },
     });
 
-    await prisma.activityLog.create({
-      data: {
-        entityType: "campaign",
-        entityId: campaign.id,
-        action: "created",
-        description: `New campaign created: ${campaign.name || campaign.id}`,
-      },
-    });
+    void logCreate(userId, "campaign", campaign.id, `Created campaign: ${campaign.name || campaign.id}`);
 
     return NextResponse.json(campaign, { status: 201 });
   } catch (error) {

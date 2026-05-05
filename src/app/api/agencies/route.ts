@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { auth } from "@/lib/auth";
+import { logActivity } from "@/lib/activity-log";
 
 export async function GET(request: Request) {
   try {
@@ -90,6 +92,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const session = await auth();
+    const userId = (session?.user as { id?: string } | undefined)?.id ?? null;
     const body = await request.json();
 
     const agency = await prisma.agency.create({
@@ -125,13 +129,12 @@ export async function POST(request: Request) {
       },
     });
 
-    await prisma.activityLog.create({
-      data: {
-        entityType: "agency",
-        entityId: agency.id,
-        action: "created",
-        description: `New agency created: ${agency.name || agency.id}`,
-      },
+    void logActivity({
+      userId,
+      entity: "agency",
+      entityId: agency.id,
+      action: "created",
+      description: `Created agency: ${agency.name || agency.id}`,
     });
 
     return NextResponse.json(agency, { status: 201 });

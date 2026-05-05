@@ -4,6 +4,8 @@ import { Prisma } from "@/generated/prisma";
 import { createOrder, type ShopifyOrderInput } from "@/lib/shopify";
 import { withRetry } from "@/lib/shopify-retry";
 import { validateTransition, type CollaborationContext } from "@/lib/state-machine";
+import { auth } from "@/lib/auth";
+import { logActivity, logDelete } from "@/lib/activity-log";
 
 export async function GET(
   request: NextRequest,
@@ -181,34 +183,36 @@ export async function PUT(
 
     // Log status change in activity log
     if (body.status && previousCollab && body.status !== previousCollab.status) {
-      await prisma.activityLog.create({
-        data: {
-          entityType: "collaboration",
-          entityId: id,
-          action: "status_change",
-          field: "status",
-          oldValue: previousCollab.status,
-          newValue: body.status,
-          description: `Status changed from ${previousCollab.status} to ${body.status}`,
-        },
+      const session = await auth();
+      const userIdForStatus = (session?.user as { id?: string } | undefined)?.id ?? null;
+      void logActivity({
+        userId: userIdForStatus,
+        entity: "collaboration",
+        entityId: id,
+        action: "status_change",
+        field: "status",
+        oldValue: previousCollab.status,
+        newValue: body.status,
+        description: `Status changed from ${previousCollab.status} to ${body.status}`,
       });
     }
 
-    // Log other field changes
+    // Log other field changes — fire-and-forget per field
     if (previousCollab) {
+      const session = await auth();
+      const userId = (session?.user as { id?: string } | undefined)?.id ?? null;
       const trackFields = ["agreedAmount", "dueDate", "brief", "type"];
       for (const field of trackFields) {
         if (body[field] !== undefined && String(body[field]) !== String((previousCollab as Record<string, unknown>)[field])) {
-          await prisma.activityLog.create({
-            data: {
-              entityType: "collaboration",
-              entityId: id,
-              action: "field_update",
-              field,
-              oldValue: String((previousCollab as Record<string, unknown>)[field] ?? ""),
-              newValue: String(body[field] ?? ""),
-              description: `${field} updated`,
-            },
+          void logActivity({
+            userId,
+            entity: "collaboration",
+            entityId: id,
+            action: "field_update",
+            field,
+            oldValue: String((previousCollab as Record<string, unknown>)[field] ?? ""),
+            newValue: String(body[field] ?? ""),
+            description: `${field} updated`,
           });
         }
       }
@@ -364,16 +368,20 @@ export async function PUT(
 }
 
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   props: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await auth();
+    const userId = (session?.user as { id?: string } | undefined)?.id ?? null;
     const { id } = await props.params;
 
     const collaboration = await prisma.collaboration.update({
       where: { id },
       data: { status: "cancelled" },
     });
+
+    void logDelete(userId, "collaboration", id, "Cancelled collaboration");
 
     return NextResponse.json(collaboration);
   } catch (error) {

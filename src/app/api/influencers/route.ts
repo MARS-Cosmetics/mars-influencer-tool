@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { Prisma } from "@/generated/prisma";
+import { auth } from "@/lib/auth";
+import { logCreate } from "@/lib/activity-log";
 
 export async function GET(request: NextRequest) {
   try {
@@ -160,18 +162,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const session = await auth();
+    const userId = (session?.user as { id?: string } | undefined)?.id ?? null;
+
     const influencer = await prisma.influencer.create({
       data: body,
     });
 
-    await prisma.activityLog.create({
-      data: {
-        entityType: "influencer",
-        entityId: influencer.id,
-        action: "created",
-        description: `New influencer created: ${influencer.name || influencer.id}`,
-      },
-    });
+    void logCreate(userId, "influencer", influencer.id, `Created influencer: ${influencer.name || influencer.id}`);
 
     return NextResponse.json(influencer, { status: 201 });
   } catch (error) {

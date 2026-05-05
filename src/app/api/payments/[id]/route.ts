@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { Prisma } from "@/generated/prisma";
+import { auth } from "@/lib/auth";
+import { logFieldDiffs, logDelete } from "@/lib/activity-log";
 
 export async function GET(
   _request: NextRequest,
@@ -77,24 +79,17 @@ export async function PUT(
       data: body,
     });
 
-    const trackFields = ["status", "amount"];
-    for (const field of trackFields) {
-      const oldVal = String((previous as any)?.[field] ?? "");
-      const newVal = String((payment as any)[field] ?? "");
-      if (oldVal !== newVal) {
-        await prisma.activityLog.create({
-          data: {
-            entityType: "payment",
-            entityId: id,
-            action: field === "status" ? "status_change" : "field_update",
-            field,
-            oldValue: oldVal,
-            newValue: newVal,
-            description: `${field} updated`,
-          },
-        });
-      }
-    }
+    const session = await auth();
+    const userId = (session?.user as { id?: string } | undefined)?.id ?? null;
+
+    void logFieldDiffs(
+      userId,
+      "payment",
+      id,
+      previous as Record<string, unknown> | null,
+      payment as unknown as Record<string, unknown>,
+      ["status", "amount"],
+    );
 
     return NextResponse.json(payment);
   } catch (error) {
@@ -112,11 +107,15 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await auth();
+    const userId = (session?.user as { id?: string } | undefined)?.id ?? null;
     const { id } = await params;
 
     await prisma.payment.delete({
       where: { id },
     });
+
+    void logDelete(userId, "payment", id, "Deleted payment");
 
     return NextResponse.json({ success: true });
   } catch (error) {

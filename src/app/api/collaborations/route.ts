@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { Prisma } from "@/generated/prisma";
+import { auth } from "@/lib/auth";
+import { logCreate } from "@/lib/activity-log";
 
 export async function GET(request: NextRequest) {
   try {
@@ -154,6 +156,9 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const session = await auth();
+    const userId = (session?.user as { id?: string } | undefined)?.id ?? null;
+
     const collaboration = await prisma.collaboration.create({
       data: body,
       include: {
@@ -161,6 +166,13 @@ export async function POST(request: NextRequest) {
         brand: { select: { id: true, name: true } },
       },
     });
+
+    void logCreate(
+      userId,
+      "collaboration",
+      collaboration.id,
+      `Created collaboration with ${collaboration.influencer.name}${collaboration.brand?.name ? ` for ${collaboration.brand.name}` : ""}`,
+    );
 
     // Auto-create CollaborationProducts if provided
     if (Array.isArray(productsToAdd) && productsToAdd.length > 0) {

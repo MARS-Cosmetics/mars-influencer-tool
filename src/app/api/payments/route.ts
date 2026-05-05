@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { Prisma } from "@/generated/prisma";
+import { auth } from "@/lib/auth";
+import { logCreate } from "@/lib/activity-log";
 
 export async function GET(request: NextRequest) {
   try {
@@ -85,18 +87,19 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const session = await auth();
+    const userId = (session?.user as { id?: string } | undefined)?.id ?? null;
+
     const payment = await prisma.payment.create({
       data: body,
     });
 
-    await prisma.activityLog.create({
-      data: {
-        entityType: "payment",
-        entityId: payment.id,
-        action: "created",
-        description: `New payment created: ${payment.id}`,
-      },
-    });
+    void logCreate(
+      userId,
+      "payment",
+      payment.id,
+      `Created payment: ${payment.amount} ${payment.currency ?? "INR"}`,
+    );
 
     return NextResponse.json(payment, { status: 201 });
   } catch (error) {

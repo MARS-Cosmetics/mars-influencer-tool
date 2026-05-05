@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { auth } from "@/lib/auth";
+import { logFieldDiffs, logDelete } from "@/lib/activity-log";
 
 export async function GET(
   _request: Request,
@@ -65,24 +67,17 @@ export async function PUT(
       include: { brand: true },
     });
 
-    const trackFields = ["status", "totalBudget", "name"];
-    for (const field of trackFields) {
-      const oldVal = String((previous as any)?.[field] ?? "");
-      const newVal = String((campaign as any)[field] ?? "");
-      if (oldVal !== newVal) {
-        await prisma.activityLog.create({
-          data: {
-            entityType: "campaign",
-            entityId: id,
-            action: field === "status" ? "status_change" : field === "totalBudget" ? "field_update" : "field_update",
-            field,
-            oldValue: oldVal,
-            newValue: newVal,
-            description: `${field} updated`,
-          },
-        });
-      }
-    }
+    const session = await auth();
+    const userId = (session?.user as { id?: string } | undefined)?.id ?? null;
+
+    void logFieldDiffs(
+      userId,
+      "campaign",
+      id,
+      previous as Record<string, unknown> | null,
+      campaign as unknown as Record<string, unknown>,
+      ["status", "totalBudget", "name"],
+    );
 
     return NextResponse.json(campaign);
   } catch (error) {
@@ -99,17 +94,13 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await auth();
+    const userId = (session?.user as { id?: string } | undefined)?.id ?? null;
     const { id } = await params;
+    const before = await prisma.campaign.findUnique({ where: { id }, select: { name: true } });
     await prisma.campaign.delete({ where: { id } });
 
-    await prisma.activityLog.create({
-      data: {
-        entityType: "campaign",
-        entityId: id,
-        action: "deleted",
-        description: `Campaign deleted/deactivated`,
-      },
-    });
+    void logDelete(userId, "campaign", id, `Deleted campaign: ${before?.name ?? id}`);
 
     return NextResponse.json({ success: true });
   } catch (error) {
