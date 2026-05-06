@@ -1,13 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { Prisma } from "@/generated/prisma";
+import { auth } from "@/lib/auth";
 import { parseUpload, validateAndNormalize, type RowError } from "@/lib/influencer-bulk-import";
+import { rateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
 const MAX_ROWS = 1000;
+const BULK_MAX = 5;
+const BULK_WINDOW_SECONDS = 60 * 60; // 5 imports per hour per user
 
 export async function POST(request: NextRequest) {
+  const session = await auth();
+  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const userId = session.user.id as string;
+  const rl = await rateLimit(`user:${userId}:bulk-import`, BULK_MAX, BULK_WINDOW_SECONDS);
+  if (!rl.allowed) return rateLimitResponse(rl, BULK_MAX);
+
   let formData: FormData;
   try {
     formData = await request.formData();

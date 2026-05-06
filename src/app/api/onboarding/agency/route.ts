@@ -11,8 +11,20 @@ import {
   validateAadhar,
   validateUPI,
 } from "@/lib/validations";
+import { rateLimit, getClientIp, rateLimitResponse } from "@/lib/rate-limit";
+
+// Public unauthenticated endpoint — rate-limit aggressively per IP.
+const ONBOARDING_MAX = 3;
+const ONBOARDING_WINDOW_SECONDS = 60 * 60; // 1 hour
 
 export async function POST(request: NextRequest) {
+  // Rate-limit BEFORE doing any work
+  const ip = getClientIp(request);
+  const rl = await rateLimit(`ip:${ip}:onboarding`, ONBOARDING_MAX, ONBOARDING_WINDOW_SECONDS);
+  if (!rl.allowed) {
+    return rateLimitResponse(rl, ONBOARDING_MAX);
+  }
+
   try {
     const body = await request.json();
 

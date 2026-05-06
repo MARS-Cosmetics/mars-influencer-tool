@@ -63,6 +63,11 @@ export async function GET(request: NextRequest) {
       where: { accessedAt: { lt: oneYearAgo } },
     });
 
+    // Rate-limit buckets — purge anything with an expired window
+    const rateLimitResult = await prisma.rateLimitBucket.deleteMany({
+      where: { resetAt: { lt: new Date() } },
+    });
+
     return NextResponse.json({
       ok: true,
       deletedAt: new Date().toISOString(),
@@ -72,6 +77,9 @@ export async function GET(request: NextRequest) {
       },
       documentAccessLog: {
         deleted: accessLogResult.count,
+      },
+      rateLimitBuckets: {
+        deleted: rateLimitResult.count,
       },
     });
   } catch (e) {

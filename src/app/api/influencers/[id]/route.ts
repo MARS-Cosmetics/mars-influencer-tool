@@ -137,6 +137,29 @@ export async function PUT(
       }
     }
 
+    // Empty strings → null for enum / optional-string columns. Prisma rejects
+    // "" for enum columns with a validation error, and we'd rather store null.
+    const nullableEnumFields = [
+      "gender",
+      "tier",
+      "source",
+      "paymentPreference",
+      "primaryLanguage",
+      "igAudienceTopAgeRange",
+      "referredBy",
+      "rateNotes",
+      "internalNotes",
+    ];
+    for (const field of nullableEnumFields) {
+      if (body[field] === "") body[field] = null;
+    }
+
+    // managedBy is a UI-only toggle — when set to "self", clear any agencyId
+    // so the form doesn't accidentally re-link a previously-loaded agency.
+    if (body.managedBy === "self") {
+      body.agencyId = "";
+    }
+
     // Convert FK fields to Prisma relation syntax
     // agencyId → agency: { connect: { id } } or agency: { disconnect: true }
     const relationMap: Record<string, string> = {
@@ -188,10 +211,17 @@ export async function PUT(
     return NextResponse.json(influencer);
   } catch (error) {
     console.error("Failed to update influencer:", error);
-    const message =
-      error instanceof Prisma.PrismaClientKnownRequestError
-        ? error.message
-        : "Failed to update influencer";
+    // Surface the real Prisma message for both Known and Validation errors —
+    // the previous generic fallback hid bad-enum / unknown-field issues from users.
+    let message = "Failed to update influencer";
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError ||
+      error instanceof Prisma.PrismaClientValidationError
+    ) {
+      message = error.message.split("\n").pop()?.trim() || error.message;
+    } else if (error instanceof Error) {
+      message = error.message;
+    }
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

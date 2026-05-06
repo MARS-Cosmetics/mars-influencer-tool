@@ -1,13 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { Prisma, InfluencerTier, InfluencerStatus } from "@/generated/prisma";
+import { auth } from "@/lib/auth";
 import { buildExportXlsx, buildExportCsv, EXPORT_PRISMA_SELECT } from "@/lib/influencer-export";
+import { rateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
-const MAX_EXPORT_ROWS = 10_000; // protect against unintentionally huge exports
+const MAX_EXPORT_ROWS = 10_000;
+const EXPORT_MAX = 10;
+const EXPORT_WINDOW_SECONDS = 24 * 60 * 60; // 10 exports per day per user
 
 export async function GET(request: NextRequest) {
+  const session = await auth();
+  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const userId = session.user.id as string;
+  const rl = await rateLimit(`user:${userId}:export`, EXPORT_MAX, EXPORT_WINDOW_SECONDS);
+  if (!rl.allowed) return rateLimitResponse(rl, EXPORT_MAX);
+
   const sp = request.nextUrl.searchParams;
   const format = (sp.get("format") ?? "xlsx").toLowerCase();
   if (format !== "xlsx" && format !== "csv") {

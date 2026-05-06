@@ -93,65 +93,82 @@ export function DiscoverForm() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header row: campaign + platform */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="df-campaign">Campaign</Label>
-          <select
-            id="df-campaign"
-            value={campaignId}
-            onChange={(e) => setCampaignId(e.target.value)}
-            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-            disabled={campaignsLoading || campaigns.length === 0}
+    <div className="space-y-4">
+      {/* Sticky action bar: campaign + platform + Search.
+          Stays in view while user scrolls filters/results so they don't
+          have to scroll back up to re-run the search. */}
+      <div className="sticky top-0 z-20 -mx-4 border-b bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_minmax(140px,180px)_auto] sm:items-end">
+          <div className="space-y-1.5">
+            <Label htmlFor="df-campaign" className="text-xs">Campaign</Label>
+            <select
+              id="df-campaign"
+              value={campaignId}
+              onChange={(e) => setCampaignId(e.target.value)}
+              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+              disabled={campaignsLoading || campaigns.length === 0}
+            >
+              {campaignsLoading ? (
+                <option>Loading…</option>
+              ) : campaigns.length === 0 ? (
+                <option>No campaigns — create one first</option>
+              ) : (
+                campaigns.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                    {c.brand?.name ? ` — ${c.brand.name}` : ""}
+                  </option>
+                ))
+              )}
+            </select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="df-platform" className="text-xs">Platform</Label>
+            <select
+              id="df-platform"
+              value={platform}
+              onChange={(e) => setPlatform(e.target.value as Platform)}
+              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value="instagram">Instagram</option>
+              <option value="youtube">YouTube</option>
+              <option value="tiktok">TikTok</option>
+            </select>
+          </div>
+
+          <Button
+            onClick={onSearch}
+            disabled={!canSearch}
+            className="h-9 w-full sm:w-auto sm:px-6"
           >
-            {campaignsLoading ? (
-              <option>Loading…</option>
-            ) : campaigns.length === 0 ? (
-              <option>No campaigns — create one first</option>
-            ) : (
-              campaigns.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                  {c.brand?.name ? ` — ${c.brand.name}` : ""}
-                </option>
-              ))
-            )}
-          </select>
-          {campaignsError && (
-            <p className="text-xs text-destructive">{campaignsError}</p>
-          )}
+            <Search className="mr-2 h-4 w-4" />
+            {loading ? "Searching…" : "Search"}
+          </Button>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="df-platform">Platform</Label>
-          <select
-            id="df-platform"
-            value={platform}
-            onChange={(e) => setPlatform(e.target.value as Platform)}
-            className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-          >
-            <option value="instagram">Instagram</option>
-            <option value="youtube">YouTube</option>
-            <option value="tiktok">TikTok</option>
-          </select>
-        </div>
+        {/* Status row — credits + error fit on one compact line */}
+        {(campaignsError || (results && results.balance !== null)) && (
+          <div className="mt-2 flex items-center justify-between text-xs">
+            <span className="text-destructive">{campaignsError ?? ""}</span>
+            {results?.balance !== null && results?.balance !== undefined && (
+              <span className="flex items-center gap-1 text-muted-foreground">
+                <Wallet className="h-3 w-3" />
+                Credits: {results.balance.toFixed(2)}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Two columns: filters on left, results on right (stacked on mobile) */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[400px_1fr]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[380px_1fr]">
         <div>
           <FilterPanel
             value={filters}
             onChange={setFilters}
             onReset={() => setFilters(DEFAULT_FILTERS)}
           />
-          <div className="mt-4">
-            <Button onClick={onSearch} disabled={!canSearch} className="w-full">
-              <Search className="mr-2 h-4 w-4" />
-              {loading ? "Searching…" : "Search creators"}
-            </Button>
-          </div>
         </div>
 
         <div>
@@ -173,23 +190,15 @@ export function DiscoverForm() {
 
             <TabsContent value="results" className="mt-4 space-y-4">
               {results && (
-                <div className="flex items-center justify-between text-sm text-muted-foreground">
-                  <span>
-                    {results.total.toLocaleString()} total matches — showing{" "}
-                    {results.creators.length}
-                  </span>
-                  {results.balance !== null && (
-                    <span className="flex items-center gap-1">
-                      <Wallet className="h-3 w-3" />
-                      Credits: {results.balance.toFixed(2)}
-                    </span>
-                  )}
+                <div className="text-sm text-muted-foreground">
+                  {results.total.toLocaleString()} total matches — showing{" "}
+                  {results.creators.length}
                 </div>
               )}
 
               {!results && !loading && (
                 <div className="rounded-lg border p-8 text-center text-sm text-muted-foreground">
-                  Adjust the filters on the left and click Search.
+                  Pick a campaign and click Search above.
                 </div>
               )}
 

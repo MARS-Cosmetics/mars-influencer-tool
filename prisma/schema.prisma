@@ -1386,6 +1386,19 @@ model DocumentRecord {
   @@map("document_records")
 }
 
+// ============================================================
+// RATE LIMITING — fixed-window bucket per key (IP, userId, etc.)
+// ============================================================
+
+model RateLimitBucket {
+  key        String   @id // "ip:1.2.3.4:onboarding" or "user:abc:presign"
+  count      Int      @default(0)
+  resetAt    DateTime @map("reset_at") @db.Timestamptz()
+
+  @@index([resetAt])
+  @@map("rate_limit_buckets")
+}
+
 model DocumentAccessLog {
   id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   documentId   String   @map("document_id") @db.Uuid
