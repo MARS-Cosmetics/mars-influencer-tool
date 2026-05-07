@@ -101,6 +101,21 @@ export default function NewInfluencerPage() {
 
   const [agencies, setAgencies] = useState<SearchableSelectOption[]>([]);
   const [dataSource, setDataSource] = useState<"creatorx" | "culturex" | "instagram_fallback" | null>(null);
+  const [fetchedExtras, setFetchedExtras] = useState<{
+    profileImageUrl: string | null;
+    isVerified: boolean | null;
+    igLast8ReelViews: number[];
+    igAudienceAgeBreakdown: Record<string, number> | null;
+    igAudienceTopCities: Record<string, number> | null;
+    igAudienceTopCountries: Record<string, number> | null;
+  }>({
+    profileImageUrl: null,
+    isVerified: null,
+    igLast8ReelViews: [],
+    igAudienceAgeBreakdown: null,
+    igAudienceTopCities: null,
+    igAudienceTopCountries: null,
+  });
   const [gstVerification, setGstVerification] = useState<{ status: "idle" | "loading" | "success" | "error"; message: string }>({ status: "idle", message: "" });
   // Track the discovery bookmark (if any) that seeded this form — so we can
   // clean it up from the Discovered tab after successful influencer creation.
@@ -231,41 +246,89 @@ export default function NewInfluencerPage() {
     setDataSource(null);
     try {
       const res = await fetch(`/api/culturex/${encodeURIComponent(handle)}`);
-      if (!res.ok) throw new Error("Failed to fetch from CultureX");
-      const data = await res.json();
-      if (!data.found) {
-        toast.error("Profile not found on CultureX");
+      const data = await res.json().catch(() => ({}));
+      console.log(data);
+      if (!res.ok) {
+        // Influenzer error — show the real reason instead of pretending success
+        if (data?.source === "creatorx_error") {
+          toast.error(data.error || "Influenzer fetch failed");
+        } else {
+          toast.error(data?.error || "Failed to fetch profile");
+        }
         return;
       }
-      setDataSource(data.source || "culturex");
+      if (!data.found) {
+        toast.error("Profile not found");
+        return;
+      }
+      setDataSource(data.source || "creatorx");
       setForm((prev) => ({
         ...prev,
-        igFollowerCount: String(data.igFollowerCount ?? ""),
-        igFollowingCount: String(data.igFollowingCount ?? ""),
-        igPostCount: String(data.igPostCount ?? ""),
-        igEngagementRate: String(data.igEngagementRate ?? ""),
-        igAvgLikes: String(data.igAvgLikes ?? ""),
-        igAvgComments: String(data.igAvgComments ?? ""),
-        igAvgReelViews: String(data.igAvgReelViews ?? ""),
-        igAvgStoryViews: String(data.igAvgStoryViews ?? ""),
-        igMedianReelViews: String(data.igMedianReelViews ?? ""),
-        igCredibilityScore: String(data.igCredibilityScore ?? ""),
-        igAudienceMalePct: String(data.igAudienceMalePct ?? ""),
-        igAudienceFemalePct: String(data.igAudienceFemalePct ?? ""),
-        igAudienceTopAgeRange: String(data.igAudienceTopAgeRange ?? ""),
-        categories: data.categories ? data.categories.join(", ") : prev.categories,
+        name: prev.name || data.name || "",
+        igFollowerCount: data.igFollowerCount != null ? String(data.igFollowerCount) : "",
+        igFollowingCount: data.igFollowingCount != null ? String(data.igFollowingCount) : "",
+        igPostCount: data.igPostCount != null ? String(data.igPostCount) : "",
+        igEngagementRate:
+          typeof data.igEngagementRate === "number"
+            ? // engagement_rate may come as 0-1 (0.05) or as already-percent (5).
+              // We store as percent in the form to match how the UI displays it.
+              (data.igEngagementRate <= 1
+                ? data.igEngagementRate * 100
+                : data.igEngagementRate
+              ).toFixed(2)
+            : "",
+        igAvgLikes: data.igAvgLikes != null ? String(data.igAvgLikes) : "",
+        igAvgComments: data.igAvgComments != null ? String(data.igAvgComments) : "",
+        igAvgReelViews: data.igAvgReelViews != null ? String(data.igAvgReelViews) : "",
+        igAvgStoryViews: data.igAvgStoryViews != null ? String(data.igAvgStoryViews) : "",
+        igMedianReelViews: data.igMedianReelViews != null ? String(data.igMedianReelViews) : "",
+        igCredibilityScore:
+          typeof data.igCredibilityScore === "number"
+            ? data.igCredibilityScore.toFixed(2)
+            : "",
+        igAudienceMalePct:
+          typeof data.igAudienceMalePct === "number"
+            ? data.igAudienceMalePct.toFixed(2)
+            : "",
+        igAudienceFemalePct:
+          typeof data.igAudienceFemalePct === "number"
+            ? data.igAudienceFemalePct.toFixed(2)
+            : "",
+        igAudienceTopAgeRange: data.igAudienceTopAgeRange ? String(data.igAudienceTopAgeRange) : "",
+        categories: data.categories?.length ? data.categories.join(", ") : prev.categories,
         tier: data.tier || prev.tier,
         bio: prev.bio || data.bio || "",
       }));
+      setFetchedExtras({
+        profileImageUrl: data.profileImageUrl ?? null,
+        isVerified: typeof data.isVerified === "boolean" ? data.isVerified : null,
+        igLast8ReelViews: Array.isArray(data.igLast8ReelViews)
+          ? (data.igLast8ReelViews as number[]).filter((v) => typeof v === "number")
+          : [],
+        igAudienceAgeBreakdown:
+          data.igAudienceAgeBreakdown && typeof data.igAudienceAgeBreakdown === "object"
+            ? (data.igAudienceAgeBreakdown as Record<string, number>)
+            : null,
+        igAudienceTopCities:
+          data.igAudienceTopCities && typeof data.igAudienceTopCities === "object"
+            ? (data.igAudienceTopCities as Record<string, number>)
+            : null,
+        igAudienceTopCountries:
+          data.igAudienceTopCountries && typeof data.igAudienceTopCountries === "object"
+            ? (data.igAudienceTopCountries as Record<string, number>)
+            : null,
+      });
       if (data.source === "instagram_fallback") {
-        toast.info("Profile fetched from Instagram (analytics source not available)");
+        toast.info("Fetched from Instagram public profile — analytics provider unavailable, only basic counts filled");
+      } else if (data.source === "cached") {
+        toast.success("Already synced in last 24h — using cached data");
       } else if (data.source === "creatorx") {
-        toast.success("Profile data fetched from CreatorX");
+        toast.success("Profile fetched from Influenzer");
       } else {
-        toast.success("Profile data fetched from CultureX");
+        toast.success("Profile fetched from CultureX");
       }
     } catch {
-      toast.error("Failed to fetch from CultureX");
+      toast.error("Failed to fetch profile");
     } finally {
       setIsFetchingCultureX(false);
     }
@@ -316,10 +379,37 @@ export default function NewInfluencerPage() {
     setIsSubmitting(true);
 
     try {
+      const payload: Record<string, unknown> = { ...form };
+      // Carry over data the Fetch step pulled from Influenzer that doesn't
+      // live in the string-keyed form state.
+      if (fetchedExtras.profileImageUrl) {
+        payload.profileImageUrl = fetchedExtras.profileImageUrl;
+      }
+      if (fetchedExtras.isVerified != null) {
+        payload.isVerified = fetchedExtras.isVerified;
+      }
+      if (fetchedExtras.igLast8ReelViews.length > 0) {
+        payload.igLast8ReelViews = fetchedExtras.igLast8ReelViews;
+      }
+      if (fetchedExtras.igAudienceAgeBreakdown) {
+        payload.igAudienceAgeBreakdown = fetchedExtras.igAudienceAgeBreakdown;
+      }
+      if (fetchedExtras.igAudienceTopCities) {
+        payload.igAudienceTopCities = fetchedExtras.igAudienceTopCities;
+      }
+      if (fetchedExtras.igAudienceTopCountries) {
+        payload.igAudienceTopCountries = fetchedExtras.igAudienceTopCountries;
+      }
+      // Mark the metrics as freshly synced so the 24h cache logic and the
+      // discovered/refresh-all jobs can see this influencer was just hydrated.
+      if (form.igFollowerCount) {
+        payload.metricsLastSyncedAt = new Date().toISOString();
+      }
+
       const res = await fetch("/api/influencers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
@@ -471,7 +561,7 @@ export default function NewInfluencerPage() {
                   size="sm"
                   onClick={fetchFromCultureX}
                   disabled={isFetchingCultureX}
-                  title="Fetch from CultureX"
+                  title="Fetch profile data from Influenzer"
                 >
                   {isFetchingCultureX ? <Loader2 className="size-4 animate-spin" /> : <><Search className="size-4 mr-1" /> Fetch</>}
                 </Button>
@@ -541,7 +631,7 @@ export default function NewInfluencerPage() {
               {dataSource === "instagram_fallback" && (
                 <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-200">
                   <Info className="size-4 mt-0.5 shrink-0" />
-                  <span>Limited data from Instagram (CultureX profile not found). Engagement rate and audience demographics unavailable.</span>
+                  <span>Limited data from Instagram public profile (Influenzer profile not found). Engagement rate and audience demographics unavailable.</span>
                 </div>
               )}
               {dataSource === "culturex" && (
@@ -553,7 +643,9 @@ export default function NewInfluencerPage() {
               {dataSource === "creatorx" && (
                 <div className="mb-4 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-200">
                   <Info className="size-4 mt-0.5 shrink-0" />
-                  <span>Profile data from CreatorX. Per-post reel stats (avg likes/comments/views) aren&apos;t provided by the CreatorX <code>/profile</code> endpoint — those fields will be blank unless re-fetched from another source.</span>
+                  <span>
+                    Profile data from Influenzer. Avg likes / avg comments / story views / credibility score aren&apos;t in Influenzer&apos;s response — those fields stay blank. Reel views, audience demographics, and follower counts are filled.
+                  </span>
                 </div>
               )}
               <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
@@ -609,7 +701,88 @@ export default function NewInfluencerPage() {
                   <p className="text-xs text-muted-foreground">Top Age Range</p>
                   <p className="text-sm font-medium">{form.igAudienceTopAgeRange || "-"}</p>
                 </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Verified</p>
+                  <p className="text-sm font-medium">
+                    {fetchedExtras.isVerified == null ? "-" : fetchedExtras.isVerified ? "Yes" : "No"}
+                  </p>
+                </div>
               </div>
+
+              {fetchedExtras.igAudienceAgeBreakdown && (
+                <div className="mt-4">
+                  <p className="text-xs text-muted-foreground mb-1">Audience Age Breakdown</p>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(fetchedExtras.igAudienceAgeBreakdown)
+                      .sort((a, b) => b[1] - a[1])
+                      .map(([code, pct]) => (
+                        <span key={code} className="rounded border bg-muted px-2 py-0.5 text-xs">
+                          {code}: {pct.toFixed(1)}%
+                        </span>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {fetchedExtras.igAudienceTopCountries && (
+                <div className="mt-4">
+                  <p className="text-xs text-muted-foreground mb-1">Top Audience Countries</p>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(fetchedExtras.igAudienceTopCountries)
+                      .sort((a, b) => b[1] - a[1])
+                      .slice(0, 6)
+                      .map(([name, pct]) => (
+                        <span key={name} className="rounded border bg-muted px-2 py-0.5 text-xs">
+                          {name}: {pct.toFixed(1)}%
+                        </span>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {fetchedExtras.igAudienceTopCities && (
+                <div className="mt-4">
+                  <p className="text-xs text-muted-foreground mb-1">Top Audience Cities</p>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(fetchedExtras.igAudienceTopCities)
+                      .sort((a, b) => b[1] - a[1])
+                      .slice(0, 8)
+                      .map(([name, pct]) => (
+                        <span key={name} className="rounded border bg-muted px-2 py-0.5 text-xs">
+                          {name}: {pct.toFixed(1)}%
+                        </span>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {fetchedExtras.igLast8ReelViews.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-xs text-muted-foreground mb-1">
+                    Last {fetchedExtras.igLast8ReelViews.length} Reel Views
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {fetchedExtras.igLast8ReelViews.map((v, i) => (
+                      <span key={i} className="rounded border bg-muted px-2 py-0.5 text-xs">
+                        {formatMetric(v)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {fetchedExtras.profileImageUrl && (
+                <div className="mt-4 flex items-center gap-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={fetchedExtras.profileImageUrl}
+                    alt="Profile"
+                    className="size-12 rounded-full border object-cover"
+                  />
+                  <span className="text-xs text-muted-foreground">Profile picture from Influenzer</span>
+                </div>
+              )}
+
               {/* Hidden inputs so metrics get submitted */}
               <input type="hidden" name="igFollowerCount" value={form.igFollowerCount} />
               <input type="hidden" name="igFollowingCount" value={form.igFollowingCount} />

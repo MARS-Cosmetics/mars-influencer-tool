@@ -98,6 +98,7 @@ export interface NormalizedProfile {
   igAudienceMalePct: number | null;
   igAudienceFemalePct: number | null;
   igAudienceTopAgeRange: string | null;
+  igAudienceAgeBreakdown: Record<string, number> | null;
   igAudienceTopCities: Record<string, number> | null;
   igAudienceTopCountries: Record<string, number> | null;
   categories: string[];
@@ -198,6 +199,7 @@ function normalizeCultureXResponse(cx: CultureXProfile): NormalizedProfile {
     igAudienceMalePct: null,  // Not available from this endpoint
     igAudienceFemalePct: null,
     igAudienceTopAgeRange: null,
+    igAudienceAgeBreakdown: null,
     igAudienceTopCities: null,
     igAudienceTopCountries: null,
     categories: mapCategory(cx.category || ""),
@@ -342,6 +344,7 @@ function getMockProfile(handle: string): NormalizedProfile {
     igAudienceMalePct: null,
     igAudienceFemalePct: null,
     igAudienceTopAgeRange: null,
+    igAudienceAgeBreakdown: null,
     igAudienceTopCities: null,
     igAudienceTopCountries: null,
     categories: ["beauty", "lifestyle"],

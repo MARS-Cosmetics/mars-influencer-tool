@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { CampaignStatus, CollaborationStatus } from "@/generated/prisma";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Calendar, IndianRupee, Target } from "lucide-react";
+import { ArrowLeft, Calendar, IndianRupee, Pencil, Target } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -98,6 +98,12 @@ export default async function CampaignDetailPage({
         <Badge className={campaignStatusColors[campaign.status]}>
           {campaign.status}
         </Badge>
+        <Link href={`/campaigns/${id}/edit`}>
+          <Button variant="outline" size="sm">
+            <Pencil className="mr-2 h-4 w-4" />
+            Edit
+          </Button>
+        </Link>
       </div>
 
       {campaign.description && (

@@ -9,6 +9,7 @@ import {
   Globe,
   Mail,
   MapPin,
+  Pencil,
   Phone,
   User,
 } from "lucide-react";
@@ -88,6 +89,12 @@ export default async function AgencyDetailPage({
         >
           {agency.isActive ? "Active" : "Inactive"}
         </Badge>
+        <Link href={`/agencies/${id}/edit`}>
+          <Button variant="outline" size="sm">
+            <Pencil className="mr-2 h-4 w-4" />
+            Edit
+          </Button>
+        </Link>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">

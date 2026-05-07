@@ -155,6 +155,55 @@ export async function POST(request: NextRequest) {
       delete body.dateOfBirth;
     }
 
+    // metricsLastSyncedAt comes in as ISO string from the Add Influencer form
+    // when the operator has just fetched fresh data from Influenzer.
+    if (body.metricsLastSyncedAt) {
+      const dt = new Date(body.metricsLastSyncedAt);
+      body.metricsLastSyncedAt = isNaN(dt.getTime()) ? null : dt;
+      if (body.metricsLastSyncedAt === null) delete body.metricsLastSyncedAt;
+    }
+
+    // Coerce isVerified — form may send "true"/"false" strings or actual booleans.
+    if (body.isVerified !== undefined) {
+      body.isVerified =
+        body.isVerified === true || body.isVerified === "true";
+    }
+
+    // igLast8ReelViews must be an Int[] for Prisma. Accept either an array
+    // (from the API-fetch path) or a comma-separated string (manual entry).
+    if (body.igLast8ReelViews !== undefined) {
+      const raw = body.igLast8ReelViews;
+      let arr: number[] = [];
+      if (Array.isArray(raw)) {
+        arr = raw.map((v) => Number(v)).filter((n) => Number.isFinite(n));
+      } else if (typeof raw === "string" && raw.trim()) {
+        arr = raw
+          .split(",")
+          .map((s) => parseInt(s.trim(), 10))
+          .filter((n) => Number.isFinite(n));
+      }
+      if (arr.length) body.igLast8ReelViews = arr;
+      else delete body.igLast8ReelViews;
+    }
+
+    // JSON-typed audience breakdowns. Pass objects through; reject anything
+    // else (Prisma will error on a stringified object, surface it cleanly).
+    for (const f of [
+      "igAudienceAgeBreakdown",
+      "igAudienceTopCities",
+      "igAudienceTopCountries",
+      "igAudienceLanguageSplit",
+    ] as const) {
+      const v = body[f];
+      if (v == null || v === "") {
+        delete body[f];
+      } else if (typeof v !== "object") {
+        // Operator typed something into a hidden field by accident — drop it
+        // rather than crash the request.
+        delete body[f];
+      }
+    }
+
     // Remove empty strings
     for (const key of Object.keys(body)) {
       if (body[key] === "") {

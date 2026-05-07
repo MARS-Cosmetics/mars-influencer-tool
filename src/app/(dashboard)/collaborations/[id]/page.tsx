@@ -31,6 +31,7 @@ import {
   User,
   Building2,
   FileText,
+  Pencil,
 } from "lucide-react";
 
 function formatCurrency(amount: unknown, currency?: string | null): string {
@@ -214,6 +215,12 @@ export default async function CollaborationDetailPage(props: {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Link href={`/collaborations/${collaboration.id}/edit`}>
+            <Button variant="outline" size="sm">
+              <Pencil className="mr-2 h-4 w-4" />
+              Edit
+            </Button>
+          </Link>
           <DeleteButton collaborationId={collaboration.id} />
         </div>
       </div>

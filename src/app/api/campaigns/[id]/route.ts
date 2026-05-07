@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { Prisma } from "@/generated/prisma";
 import { auth } from "@/lib/auth";
 import { logFieldDiffs, logDelete } from "@/lib/activity-log";
 
@@ -51,19 +52,29 @@ export async function PUT(
       select: { status: true, totalBudget: true, name: true },
     });
 
+    // Treat empty/null as "clear this field" rather than "leave unchanged".
+    // Required fields (name, brandId, status, currency) keep their existing
+    // values if blank by being skipped from the update.
+    const data: Prisma.CampaignUpdateInput = {};
+    if (body.name) data.name = body.name;
+    if (body.status) data.status = body.status;
+    if (body.currency) data.currency = body.currency;
+    if (body.brandId) data.brand = { connect: { id: body.brandId } };
+    if ("description" in body) data.description = body.description || null;
+    if ("totalBudget" in body) {
+      data.totalBudget = body.totalBudget ? parseFloat(body.totalBudget) : null;
+    }
+    if ("startDate" in body) {
+      data.startDate = body.startDate ? new Date(body.startDate) : null;
+    }
+    if ("endDate" in body) {
+      data.endDate = body.endDate ? new Date(body.endDate) : null;
+    }
+    if ("goals" in body) data.goals = body.goals ?? Prisma.DbNull;
+
     const campaign = await prisma.campaign.update({
       where: { id },
-      data: {
-        name: body.name,
-        brandId: body.brandId,
-        description: body.description,
-        status: body.status,
-        totalBudget: body.totalBudget ? parseFloat(body.totalBudget) : undefined,
-        currency: body.currency,
-        startDate: body.startDate ? new Date(body.startDate) : undefined,
-        endDate: body.endDate ? new Date(body.endDate) : undefined,
-        goals: body.goals,
-      },
+      data,
       include: { brand: true },
     });
 
@@ -82,10 +93,16 @@ export async function PUT(
     return NextResponse.json(campaign);
   } catch (error) {
     console.error("Failed to update campaign:", error);
-    return NextResponse.json(
-      { error: "Failed to update campaign" },
-      { status: 500 }
-    );
+    let message = "Failed to update campaign";
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError ||
+      error instanceof Prisma.PrismaClientValidationError
+    ) {
+      message = error.message.split("\n").pop()?.trim() || error.message;
+    } else if (error instanceof Error) {
+      message = error.message;
+    }
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 

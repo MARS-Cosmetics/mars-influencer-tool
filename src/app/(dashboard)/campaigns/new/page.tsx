@@ -64,8 +64,33 @@ export default function NewCampaignPage() {
   useEffect(() => {
     fetch("/api/brands")
       .then((r) => r.json())
-      .then((data) => setBrands(Array.isArray(data) ? data : []))
-      .catch(() => setBrands([]));
+      .then((data) => {
+        const list: Brand[] = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.brands)
+            ? data.brands
+            : [];
+        console.log("[campaigns/new] brands loaded:", list);
+        setBrands(list);
+
+        // Pick a default brand. Try Mars Cosmetics specifically, then any
+        // Mars-family brand, then fall back to the first brand in the list.
+        const defaultBrand =
+          list.find((b) => b.name?.toLowerCase().includes("mars cosmetics")) ??
+          list.find((b) => b.name?.toLowerCase().includes("mars")) ??
+          list[0];
+
+        if (defaultBrand) {
+          console.log("[campaigns/new] defaulting brand to:", defaultBrand);
+          setForm((prev) =>
+            prev.brandId ? prev : { ...prev, brandId: defaultBrand.id },
+          );
+        }
+      })
+      .catch((err) => {
+        console.error("[campaigns/new] brand fetch failed:", err);
+        setBrands([]);
+      });
   }, []);
 
   function handleChange(

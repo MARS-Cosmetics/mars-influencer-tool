@@ -160,13 +160,20 @@ export async function DELETE(
   try {
     const { id } = await params;
 
-    await prisma.asset.delete({
-      where: { id },
-    });
+    await prisma.$transaction([
+      prisma.assetRevision.deleteMany({ where: { assetId: id } }),
+      prisma.asset.delete({ where: { id } }),
+    ]);
 
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Failed to delete asset:", error);
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2025"
+    ) {
+      return NextResponse.json({ error: "Asset not found" }, { status: 404 });
+    }
     return NextResponse.json(
       { error: "Failed to delete asset" },
       { status: 500 }

@@ -194,10 +194,17 @@ export default function EditInfluencerPage() {
     setIsFetchingCultureX(true);
     try {
       const res = await fetch(`/api/culturex/${encodeURIComponent(handle)}`);
-      if (!res.ok) throw new Error("Failed to fetch from CultureX");
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (data?.source === "creatorx_error") {
+          toast.error(data.error || "Influenzer fetch failed");
+        } else {
+          toast.error(data?.error || "Failed to fetch profile");
+        }
+        return;
+      }
       if (!data.found) {
-        toast.error("Profile not found on CultureX");
+        toast.error("Profile not found");
         return;
       }
       setForm((prev) => ({
@@ -219,9 +226,17 @@ export default function EditInfluencerPage() {
         tier: data.tier || prev.tier,
         bio: prev.bio || data.bio || "",
       }));
-      toast.success("Profile data fetched from CultureX");
+      if (data.source === "instagram_fallback") {
+        toast.info("Fetched from Instagram public profile — only basic counts filled");
+      } else if (data.source === "cached") {
+        toast.success("Already synced in last 24h — using cached data");
+      } else if (data.source === "creatorx") {
+        toast.success("Profile fetched from Influenzer");
+      } else {
+        toast.success("Profile fetched");
+      }
     } catch {
-      toast.error("Failed to fetch from CultureX");
+      toast.error("Failed to fetch profile");
     } finally {
       setIsFetchingCultureX(false);
     }
@@ -421,7 +436,7 @@ export default function EditInfluencerPage() {
                   size="sm"
                   onClick={fetchFromCultureX}
                   disabled={isFetchingCultureX}
-                  title="Fetch from CultureX"
+                  title="Fetch profile data from Influenzer"
                 >
                   {isFetchingCultureX ? <Loader2 className="size-4 animate-spin" /> : <><Search className="size-4 mr-1" /> Fetch</>}
                 </Button>
@@ -476,12 +491,12 @@ export default function EditInfluencerPage() {
           </CardContent>
         </Card>
 
-        {/* Instagram Metrics — auto-fetched via CultureX, manually editable as fallback */}
+        {/* Instagram Metrics — auto-fetched from Influenzer, manually editable as fallback */}
         <Card>
           <CardHeader>
             <CardTitle>Instagram Metrics</CardTitle>
             <p className="text-xs text-muted-foreground mt-1">
-              Auto-filled by the &quot;Fetch&quot; button above. If CultureX has no data, you can enter values manually below — they save with the rest of the form.
+              Auto-filled by the &quot;Fetch&quot; button above (data from Influenzer). Avg likes, avg comments, story views, and credibility score aren&apos;t in the Influenzer response — fill those manually if you have them.
             </p>
           </CardHeader>
           <CardContent>

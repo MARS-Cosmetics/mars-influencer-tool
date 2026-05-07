@@ -198,29 +198,40 @@ export default function NewPrParcelPage() {
     );
   }
 
-  // Check stock for products with shopifyVariantId
+  // Check stock for products with shopifyVariantId. The /api/shopify/stock-
+  // check route only implements GET (?productIds=a,b,c). The previous POST
+  // version 405'd silently and stockResults stayed empty, so out-of-stock
+  // products never blocked submission.
   async function checkStock() {
     const shopifyProducts = parcelProducts.filter((p) => p.shopifyVariantId);
     if (shopifyProducts.length === 0) {
       setStockResults([]);
+      toast.info("No Shopify-synced products to check.");
       return;
     }
     setIsCheckingStock(true);
     try {
-      const res = await fetch("/api/shopify/stock-check", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          items: shopifyProducts.map((p) => ({
-            productId: p.productId,
-            variantId: p.shopifyVariantId,
-            quantity: p.quantity,
-          })),
-        }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setStockResults(data.results || []);
+      const productIds = shopifyProducts
+        .map((p) => p.productId)
+        .filter(Boolean)
+        .join(",");
+      const res = await fetch(
+        `/api/shopify/stock-check?productIds=${encodeURIComponent(productIds)}`,
+      );
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        toast.error(errBody?.error ?? `Stock check failed (${res.status})`);
+        return;
+      }
+      const data = await res.json();
+      setStockResults(data.results ?? []);
+      const out = (data.results ?? []).filter(
+        (r: StockResult) => !r.inStock,
+      ).length;
+      if (out > 0) {
+        toast.warning(`${out} product(s) out of stock.`);
+      } else {
+        toast.success("All selected products are in stock.");
       }
     } catch {
       toast.error("Failed to check stock.");
