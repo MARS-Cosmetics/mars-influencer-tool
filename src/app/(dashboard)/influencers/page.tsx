@@ -114,6 +114,9 @@ export default async function InfluencersPage({
         socialScore: true,
         status: true,
         city: true,
+        ownerId: true,
+        ownedAt: true,
+        owner: { select: { id: true, name: true, email: true } },
       },
     }),
     prisma.influencer.count({ where }),
@@ -163,12 +166,18 @@ export default async function InfluencersPage({
               <TableHead className="text-right">Score</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>City</TableHead>
+              {sessionUser?.role === "admin" && (
+                <TableHead>Onboarded by</TableHead>
+              )}
             </TableRow>
           </TableHeader>
           <TableBody>
             {influencers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                <TableCell
+                  colSpan={sessionUser?.role === "admin" ? 9 : 8}
+                  className="h-24 text-center text-muted-foreground"
+                >
                   No influencers found.
                 </TableCell>
               </TableRow>
@@ -233,6 +242,27 @@ export default async function InfluencersPage({
                   <TableCell className="text-muted-foreground">
                     {influencer.city || "-"}
                   </TableCell>
+                  {sessionUser?.role === "admin" && (
+                    <TableCell>
+                      {influencer.owner ? (
+                        <span
+                          className="text-sm"
+                          title={
+                            influencer.owner.email +
+                            (influencer.ownedAt
+                              ? ` · since ${new Date(influencer.ownedAt).toLocaleDateString()}`
+                              : "")
+                          }
+                        >
+                          {influencer.owner.name}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">
+                          Unassigned
+                        </span>
+                      )}
+                    </TableCell>
+                  )}
                 </TableRow>
               ))
             )}

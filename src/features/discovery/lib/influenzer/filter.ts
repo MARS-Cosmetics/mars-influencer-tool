@@ -106,6 +106,14 @@ export async function filterCreators(
     ...(raw?.result?.lookalikes ?? []),
   ];
 
+  // Influenzer's API documents engagementRate as a 0–1 fraction (e.g. 0.05),
+  // but in practice some hits come back as a percentage (e.g. 7.63). Normalize
+  // to fraction so downstream `× 100` math stays correct.
+  const normalizeEr = (v: number | undefined): number => {
+    if (typeof v !== "number" || !isFinite(v) || v <= 0) return 0;
+    return v > 1 ? v / 100 : v;
+  };
+
   const creators: CreatorResult[] = hits.map((h) => ({
     userId: h.userId,
     username: h.profile?.username ?? "",
@@ -116,7 +124,7 @@ export async function filterCreators(
     isPrivate: Boolean(h.profile?.isPrivate),
     followers: h.profile?.followers ?? 0,
     engagements: h.profile?.engagements ?? 0,
-    engagementRate: h.profile?.engagementRate ?? 0,
+    engagementRate: normalizeEr(h.profile?.engagementRate),
   }));
 
   return {

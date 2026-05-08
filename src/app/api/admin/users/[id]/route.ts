@@ -161,6 +161,15 @@ export async function PATCH(
     },
   });
 
+  // Auto-release ownership when a user is deactivated so their managed
+  // influencers don't become permanently locked behind an inactive account.
+  if (data.isActive === false) {
+    await prisma.influencer.updateMany({
+      where: { ownerId: id },
+      data: { ownerId: null, ownedAt: null },
+    });
+  }
+
   return NextResponse.json(updated);
 }
 
@@ -188,6 +197,12 @@ export async function DELETE(
   await prisma.user.update({
     where: { id },
     data: { isActive: false },
+  });
+
+  // Auto-release ownership: deactivated users cannot be the lockholder.
+  await prisma.influencer.updateMany({
+    where: { ownerId: id },
+    data: { ownerId: null, ownedAt: null },
   });
 
   return NextResponse.json({ success: true });

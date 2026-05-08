@@ -35,6 +35,61 @@ export interface DiscoveryFilters {
 // Creator detail (audience breakdown + reels) — rich profile
 // ============================================================
 
+export interface CreatorReelPreview {
+  url: string | null;
+  thumbnail: string | null;
+  views: number | null;
+  likes: number | null;
+  comments: number | null;
+  caption: string | null;
+  postedAt: string | null;
+}
+
+export interface NamedPct {
+  name: string;
+  pct: number;
+}
+
+export interface CodedPct {
+  code: string;
+  pct: number;
+}
+
+export interface BrandAffinityEntry {
+  name: string;
+  pct: number;
+  category?: string | null;
+}
+
+export interface StatHistoryPoint {
+  month: string;
+  followers: number | null;
+  following: number | null;
+  avgLikes: number | null;
+  avgComments: number | null;
+  avgViews: number | null;
+}
+
+export interface SocialHandles {
+  instagram: string | null;
+  facebook: string | null;
+  twitter: string | null;
+  youtube: string | null;
+  tiktok: string | null;
+  snapchat: string | null;
+  telegram: string | null;
+  whatsapp: string | null;
+  linktree: string | null;
+  threads: string | null;
+}
+
+export interface GrowthDelta {
+  intervalMonths: number;
+  followersPct: number | null;
+  likesPct: number | null;
+  viewsPct: number | null;
+}
+
 export interface CreatorDetailResponse {
   handle: string;
   platform: Platform;
@@ -43,24 +98,75 @@ export interface CreatorDetailResponse {
   picture: string | null;
   bio: string | null;
   isVerified: boolean;
+  isPrivate: boolean;
+  category: string | null;
+  externalUrl: string | null;
+  accountType: string | null;
+  accountTypeLabel: string | null;
+  publicEmail: string | null;
+  publicPhone: string | null;
+  socialHandles: SocialHandles;
   // Core metrics
   followers: number | null;
   following: number | null;
   posts: number | null;
+  totalViews: number | null;
+  totalLikes: number | null;
+  totalComments: number | null;
   engagements: number | null;
   engagementRate: number | null;
-  // Audience
+  reelsCount: number | null;
+  // Status flags
+  hasAds: boolean | null;
+  hasAudienceData: boolean | null;
+  isOfficialArtist: boolean | null;
+  lastPostedAt: string | null;
+  daysSinceLastPost: number | null;
+  // Creator's own demographics (when API surfaces it)
+  creatorGender: string | null;
+  creatorAge: string | null;
+  creatorGeoCountry: string | null;
+  creatorGeoCity: string | null;
+  creatorLang: string | null;
+  // Audience demographics
   audienceGenderMale: number | null;
   audienceGenderFemale: number | null;
-  audienceAgeGroups: Array<{ code: string; pct: number }>;
-  audienceTopCountries: Array<{ name: string; pct: number }>;
-  audienceTopCities: Array<{ name: string; pct: number }>;
-  // Reels / content
+  audienceCredibility: number | null; // 0-100
+  audienceCredibilityClass: string | null;
+  audienceAgeGroups: CodedPct[];
+  audienceTopCountries: NamedPct[];
+  audienceTopCities: NamedPct[];
+  audienceTopStates: NamedPct[];
+  audienceLanguages: NamedPct[];
+  audienceEthnicities: NamedPct[];
+  audienceBrandAffinity: BrandAffinityEntry[];
+  audienceInterests: NamedPct[];
+  // Content (per-creator)
+  hashtags: NamedPct[];
+  mentions: NamedPct[];
+  keywords: NamedPct[];
+  brandAffinity: BrandAffinityEntry[];
+  interests: NamedPct[];
+  // Reels / content stats
+  avgLikes: number | null;
+  avgComments: number | null;
+  avgViews: number | null;
+  avgShares: number | null;
+  avgSaves: number | null;
   avgReelViews: number | null;
   medianReelViews: number | null;
   lastReelViews: number[]; // most-recent first
+  recentReels: CreatorReelPreview[];
+  popularReels: CreatorReelPreview[];
+  recentPosts: CreatorReelPreview[];
+  sponsoredPosts: CreatorReelPreview[];
+  // Growth / history
+  statHistory: StatHistoryPoint[];
+  growth: GrowthDelta[]; // computed from statHistory at 1m/3m/6m
+  cxScore: number | null;
   // Meta
   balance: number | null;
+  fetchedAt: string;
 }
 
 export type ContactType =

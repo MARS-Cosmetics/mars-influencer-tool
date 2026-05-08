@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,7 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { ArrowLeft, Loader2, Search } from "lucide-react";
+import { ArrowLeft, Loader2, Search, UserCircle2 } from "lucide-react";
 import Link from "next/link";
 import { validatePhone, validateEmail, validatePAN, validateGST, validatePincode, validateIFSC, validateUPI, validateInstagramHandle } from "@/lib/validations";
 import { INDIAN_STATES, CONTENT_LANGUAGES, INFLUENCER_CATEGORIES, CONTENT_NICHES } from "@/lib/constants";
@@ -26,12 +27,21 @@ const selectClass = "flex h-9 w-full rounded-lg border border-input bg-transpare
 export default function EditInfluencerPage() {
   const params = useParams();
   const router = useRouter();
+  const { data: session } = useSession();
+  const isAdmin =
+    (session?.user as { role?: string } | undefined)?.role === "admin";
   const id = params.id as string;
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFetchingCultureX, setIsFetchingCultureX] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [form, setForm] = useState<Record<string, string>>({});
+  const [ownership, setOwnership] = useState<{
+    owner: { id: string; name: string; email: string } | null;
+    creator: { id: string; name: string; email: string } | null;
+    ownedAt: string | null;
+    createdAt: string | null;
+  }>({ owner: null, creator: null, ownedAt: null, createdAt: null });
   const [agencies, setAgencies] = useState<SearchableSelectOption[]>([]);
   const [gstVerification, setGstVerification] = useState<{ status: "idle" | "loading" | "success" | "error"; message: string }>({ status: "idle", message: "" });
 
@@ -141,6 +151,22 @@ export default function EditInfluencerPage() {
         };
 
         setForm(formData);
+
+        // Capture ownership info for the banner.
+        const owner = json.owner as
+          | { id: string; name: string; email: string }
+          | null
+          | undefined;
+        const creator = json.creator as
+          | { id: string; name: string; email: string }
+          | null
+          | undefined;
+        setOwnership({
+          owner: owner ?? null,
+          creator: creator ?? null,
+          ownedAt: (json.ownedAt as string) ?? null,
+          createdAt: (json.createdAt as string) ?? null,
+        });
       } catch {
         toast.error("Failed to load influencer");
       } finally {
@@ -344,6 +370,43 @@ export default function EditInfluencerPage() {
           </p>
         </div>
       </div>
+
+      {isAdmin && (ownership.owner || ownership.creator) && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-muted/30 p-3 text-sm">
+          <UserCircle2 className="h-5 w-5 text-muted-foreground" />
+          {ownership.owner ? (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="text-muted-foreground">Onboarded by</span>
+              <span className="font-medium">{ownership.owner.name}</span>
+              <span className="text-xs text-muted-foreground">
+                {ownership.owner.email}
+              </span>
+              {ownership.ownedAt && (
+                <span className="text-xs text-muted-foreground">
+                  · since {new Date(ownership.ownedAt).toLocaleDateString()}
+                </span>
+              )}
+              {ownership.creator &&
+                ownership.creator.id !== ownership.owner.id && (
+                  <span className="text-xs text-muted-foreground">
+                    · originally created by {ownership.creator.name}
+                  </span>
+                )}
+            </div>
+          ) : ownership.creator ? (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="text-muted-foreground">Originally added by</span>
+              <span className="font-medium">{ownership.creator.name}</span>
+              <span className="text-xs text-muted-foreground">
+                {ownership.creator.email}
+              </span>
+              <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-900">
+                Unassigned — anyone can claim
+              </span>
+            </div>
+          ) : null}
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Basic Profile */}

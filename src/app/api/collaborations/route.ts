@@ -98,6 +98,24 @@ export async function POST(request: NextRequest) {
       delete body.agreedAmount;
     }
 
+    // GST + payable: server is authoritative on the multiplication so a
+    // tampered client can't write a payableAmount that diverges from the
+    // selected GST rate.
+    if (body.gstPct !== undefined && body.gstPct !== "" && body.gstPct !== null) {
+      const g = parseFloat(body.gstPct);
+      body.gstPct = isFinite(g) && g >= 0 ? g : null;
+    } else {
+      body.gstPct = null;
+    }
+    if (typeof body.agreedAmount === "number" && body.agreedAmount > 0) {
+      const gst = typeof body.gstPct === "number" ? body.gstPct : 0;
+      body.payableAmount =
+        Math.round(body.agreedAmount * (1 + gst / 100) * 100) / 100;
+    } else {
+      delete body.payableAmount;
+    }
+    if (body.gstPct === null) delete body.gstPct;
+
     // Convert deliverableCount to number
     if (body.deliverableCount !== undefined && body.deliverableCount !== "") {
       body.deliverableCount = parseInt(body.deliverableCount, 10);

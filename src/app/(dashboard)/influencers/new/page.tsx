@@ -13,7 +13,15 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { ArrowLeft, Loader2, Search, Info } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { ArrowLeft, Loader2, Search, Info, Lock } from "lucide-react";
 import Link from "next/link";
 import { validatePhone, validateEmail, validatePAN, validateGST, validatePincode, validateIFSC, validateUPI, validateInstagramHandle } from "@/lib/validations";
 import { INDIAN_STATES, CONTENT_LANGUAGES, INFLUENCER_CATEGORIES, CONTENT_NICHES } from "@/lib/constants";
@@ -30,11 +38,28 @@ function formatMetric(n: string | number | null | undefined): string {
   return num.toString();
 }
 
+interface LockedDialogState {
+  open: boolean;
+  ownerName: string | null;
+  ownerEmail: string | null;
+  ownedAt: string | null;
+  influencerId: string | null;
+  handle: string | null;
+}
+
 export default function NewInfluencerPage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFetchingCultureX, setIsFetchingCultureX] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [lockedDialog, setLockedDialog] = useState<LockedDialogState>({
+    open: false,
+    ownerName: null,
+    ownerEmail: null,
+    ownedAt: null,
+    influencerId: null,
+    handle: null,
+  });
   const [form, setForm] = useState<Record<string, string>>({
     name: "",
     email: "",
@@ -414,6 +439,41 @@ export default function NewInfluencerPage() {
 
       if (!res.ok) {
         const err = await res.json();
+        // Ownership lock — open the prominent dialog and stop the flow.
+        if (res.status === 409 && err.code === "OWNED_BY_OTHER") {
+          setLockedDialog({
+            open: true,
+            ownerName: err.ownerName ?? null,
+            ownerEmail: err.ownerEmail ?? null,
+            ownedAt: err.ownedAt ?? null,
+            influencerId: err.influencerId ?? null,
+            handle:
+              form.instagramHandle ||
+              form.youtubeHandle ||
+              form.tiktokHandle ||
+              null,
+          });
+          setIsSubmitting(false);
+          return;
+        }
+        // Already in our roster (no owner / same user) — also show the dialog
+        // so the user explicitly confirms before being navigated.
+        if (res.status === 409 && err.code === "ALREADY_EXISTS" && err.influencerId) {
+          setLockedDialog({
+            open: true,
+            ownerName: null,
+            ownerEmail: null,
+            ownedAt: null,
+            influencerId: err.influencerId,
+            handle:
+              form.instagramHandle ||
+              form.youtubeHandle ||
+              form.tiktokHandle ||
+              null,
+          });
+          setIsSubmitting(false);
+          return;
+        }
         throw new Error(err.error || "Failed to create influencer");
       }
 
@@ -1323,6 +1383,100 @@ export default function NewInfluencerPage() {
           </Link>
         </div>
       </form>
+
+      <Dialog
+        open={lockedDialog.open}
+        onOpenChange={(open) =>
+          setLockedDialog((prev) => ({ ...prev, open }))
+        }
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
+              <Lock className="h-5 w-5 text-amber-700" />
+            </div>
+            <DialogTitle>
+              {lockedDialog.ownerName
+                ? "This influencer is already managed"
+                : "This influencer is already in the roster"}
+            </DialogTitle>
+            <DialogDescription className="space-y-2 pt-2">
+              {lockedDialog.handle && (
+                <div className="text-sm">
+                  Handle:{" "}
+                  <span className="font-medium text-foreground">
+                    @{lockedDialog.handle}
+                  </span>
+                </div>
+              )}
+              {lockedDialog.ownerName ? (
+                <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                  Managed by{" "}
+                  <span className="font-semibold">
+                    {lockedDialog.ownerName}
+                  </span>
+                  {lockedDialog.ownerEmail && (
+                    <>
+                      {" "}
+                      <span className="text-amber-800">
+                        ({lockedDialog.ownerEmail})
+                      </span>
+                    </>
+                  )}
+                  {lockedDialog.ownedAt && (
+                    <div className="mt-1 text-xs text-amber-800">
+                      Claimed{" "}
+                      {new Date(lockedDialog.ownedAt).toLocaleDateString()}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="rounded-md border bg-muted/30 p-3 text-sm">
+                  This influencer already exists in your roster but isn&apos;t
+                  managed by anyone yet.
+                </div>
+              )}
+              <div className="pt-1 text-sm">
+                {lockedDialog.ownerName ? (
+                  <>
+                    The same influencer cannot be added twice. Please choose a
+                    different influencer, or ask{" "}
+                    <span className="font-medium">
+                      {lockedDialog.ownerName}
+                    </span>{" "}
+                    to release this one — or contact an admin to reassign it.
+                  </>
+                ) : (
+                  <>You can open the existing record to view or edit it.</>
+                )}
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:justify-between">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                setLockedDialog((prev) => ({ ...prev, open: false }))
+              }
+            >
+              Choose another influencer
+            </Button>
+            {lockedDialog.influencerId && (
+              <Button
+                type="button"
+                onClick={() => {
+                  router.push(
+                    `/influencers/${lockedDialog.influencerId}/edit`,
+                  );
+                }}
+              >
+                Open existing record
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

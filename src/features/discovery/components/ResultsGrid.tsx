@@ -4,11 +4,20 @@ import { toast } from "sonner";
 import type { CreatorResult, Platform, DiscoveryBookmarkDto } from "../lib/types";
 import { CreatorCard } from "./CreatorCard";
 
+interface ManagedByInfo {
+  influencerId: string;
+  ownerId: string | null;
+  ownerName: string | null;
+  ownerEmail: string | null;
+  ownedAt: string | null;
+}
+
 interface Props {
   creators: CreatorResult[];
   platform: Platform;
   bookmarks: DiscoveryBookmarkDto[];
   bookmarkedIds: Set<string>;
+  managedMap?: Record<string, ManagedByInfo>;
   onAdd: (args: { platform: Platform; creator: CreatorResult }) => Promise<void>;
   onRemove: (bookmarkId: string) => Promise<void>;
   onViewDetails: (creator: CreatorResult) => void;
@@ -19,6 +28,7 @@ export function ResultsGrid({
   platform,
   bookmarks,
   bookmarkedIds,
+  managedMap,
   onAdd,
   onRemove,
   onViewDetails,
@@ -43,6 +53,9 @@ export function ResultsGrid({
           key={c.userId}
           creator={c}
           isBookmarked={bookmarkedIds.has(c.userId)}
+          managedBy={
+            managedMap?.[c.username?.trim().replace(/^@/, "").toLowerCase() ?? ""]
+          }
           onBookmark={async () => {
             try {
               await onAdd({ platform, creator: c });

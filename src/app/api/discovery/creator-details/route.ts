@@ -31,6 +31,7 @@ export async function POST(request: NextRequest) {
       parsed.data.username,
       { unlock: parsed.data.unlock },
     );
+    console.log(NextResponse.json(details));
 
     return NextResponse.json(details);
   } catch (err) {

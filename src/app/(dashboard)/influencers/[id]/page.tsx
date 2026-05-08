@@ -21,6 +21,8 @@ import {
 } from "@/components/ui/table";
 import { ArrowLeft, Pencil } from "lucide-react";
 import { InfluencerDetailTabs } from "./influencer-detail-tabs";
+import { SpocCard } from "@/components/spoc-card";
+import { auth } from "@/lib/auth";
 
 function formatCount(n: number | null | undefined): string {
   if (n == null) return "-";
@@ -86,9 +88,16 @@ export default async function InfluencerDetailPage({
 }) {
   const { id } = await params;
 
+  const session = await auth();
+  const isAdmin =
+    (session?.user as { role?: string } | undefined)?.role === "admin";
+
   const influencer = await prisma.influencer.findUnique({
     where: { id },
     include: {
+      owner: { select: { id: true, name: true, email: true } },
+      creator: { select: { id: true, name: true, email: true } },
+      agency: true,
       collaborations: {
         include: {
           brand: { select: { name: true } },
@@ -128,6 +137,39 @@ export default async function InfluencerDetailPage({
   // Overview Tab Content
   const overviewContent = (
     <div className="grid gap-6 md:grid-cols-2">
+      {/* SPOC — points of contact */}
+      <div className="md:col-span-2">
+        <SpocCard
+          hideInternal={!isAdmin}
+          internal={{
+            owner: influencer.owner,
+            creator: influencer.creator,
+            ownedAt: influencer.ownedAt,
+          }}
+          influencer={{
+            name: influencer.name,
+            email: influencer.email,
+            phone: influencer.phone,
+            whatsappNumber: influencer.whatsappNumber,
+          }}
+          agency={
+            influencer.agency
+              ? {
+                  id: influencer.agency.id,
+                  name: influencer.agency.name,
+                  contactPerson: influencer.agency.contactPerson,
+                  email: influencer.agency.email,
+                  phone: influencer.agency.phone,
+                  commissionPct: influencer.agency.commissionPct
+                    ? Number(influencer.agency.commissionPct)
+                    : null,
+                  managedBy: influencer.managedBy,
+                }
+              : null
+          }
+        />
+      </div>
+
       {/* Profile */}
       <Card>
         <CardHeader>

@@ -3,6 +3,11 @@ import { prisma } from "@/lib/db";
 import { Prisma } from "@/generated/prisma";
 import { auth } from "@/lib/auth";
 import { logCreate } from "@/lib/activity-log";
+import {
+  assertCanClaim,
+  InfluencerAlreadyExistsError,
+  InfluencerOwnedByOtherError,
+} from "@/lib/influencer-ownership";
 
 export async function GET(request: NextRequest) {
   try {
@@ -213,15 +218,64 @@ export async function POST(request: NextRequest) {
 
     const session = await auth();
     const userId = (session?.user as { id?: string } | undefined)?.id ?? null;
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Org-wide ownership lock: if any influencer with the submitted handles
+    // is already claimed by another user, refuse the create with details so
+    // the UI can render "Managed by X". If a row exists but is unowned (legacy)
+    // or owned by the same user, redirect to the existing record.
+    const claim = await assertCanClaim(
+      {
+        instagramHandle: body.instagramHandle ?? null,
+        youtubeHandle: body.youtubeHandle ?? null,
+        twitterHandle: body.twitterHandle ?? null,
+        tiktokHandle: body.tiktokHandle ?? null,
+        snapchatHandle: body.snapchatHandle ?? null,
+      },
+      userId,
+    );
+    if (claim) {
+      throw new InfluencerAlreadyExistsError(claim.existingId, null);
+    }
 
     const influencer = await prisma.influencer.create({
-      data: body,
+      data: {
+        ...body,
+        ownerId: userId,
+        ownedAt: new Date(),
+        createdBy: body.createdBy ?? userId,
+      },
     });
 
     void logCreate(userId, "influencer", influencer.id, `Created influencer: ${influencer.name || influencer.id}`);
 
     return NextResponse.json(influencer, { status: 201 });
   } catch (error) {
+    if (error instanceof InfluencerOwnedByOtherError) {
+      return NextResponse.json(
+        {
+          error: `Managed by ${error.ownerName ?? "another user"}`,
+          code: "OWNED_BY_OTHER",
+          influencerId: error.influencerId,
+          ownerName: error.ownerName,
+          ownerEmail: error.ownerEmail,
+          ownedAt: error.ownedAt,
+        },
+        { status: 409 },
+      );
+    }
+    if (error instanceof InfluencerAlreadyExistsError) {
+      return NextResponse.json(
+        {
+          error: "Influencer already in your roster",
+          code: "ALREADY_EXISTS",
+          influencerId: error.influencerId,
+        },
+        { status: 409 },
+      );
+    }
     console.error("Failed to create influencer:", error);
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&

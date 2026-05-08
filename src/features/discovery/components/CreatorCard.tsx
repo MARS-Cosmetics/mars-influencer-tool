@@ -10,12 +10,22 @@ import {
   CheckCircle2,
   ExternalLink,
   BarChart3,
+  Lock,
 } from "lucide-react";
 import type { CreatorResult } from "../lib/types";
+
+interface ManagedByInfo {
+  influencerId: string;
+  ownerId: string | null;
+  ownerName: string | null;
+  ownerEmail: string | null;
+  ownedAt: string | null;
+}
 
 interface Props {
   creator: CreatorResult;
   isBookmarked: boolean;
+  managedBy?: ManagedByInfo | null;
   onBookmark: () => void;
   onUnbookmark: () => void;
   onViewDetails: () => void;
@@ -30,10 +40,12 @@ function formatCount(n: number): string {
 export function CreatorCard({
   creator,
   isBookmarked,
+  managedBy,
   onBookmark,
   onUnbookmark,
   onViewDetails,
 }: Props) {
+  const lockedByOther = Boolean(managedBy?.ownerId);
   return (
     <Card className="flex flex-col gap-3 p-4">
       <div className="flex items-start gap-3">
@@ -86,6 +98,19 @@ export function CreatorCard({
         </Badge>
         {creator.isPrivate && <Badge variant="secondary">Private</Badge>}
       </div>
+
+      {lockedByOther && (
+        <div className="flex items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] text-amber-900">
+          <Lock className="h-3 w-3 shrink-0" />
+          <span className="truncate">
+            Managed by{" "}
+            <span className="font-medium">
+              {managedBy?.ownerName ?? "another user"}
+            </span>
+            {managedBy?.ownerEmail ? ` (${managedBy.ownerEmail})` : ""}
+          </span>
+        </div>
+      )}
 
       <Button
         size="sm"

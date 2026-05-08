@@ -98,6 +98,43 @@ export async function PUT(
       body.agreedAmount = null;
     }
 
+    // Recompute payableAmount whenever agreedAmount or gstPct is in the patch.
+    // Server is authoritative so the PO downstream uses a value we can verify.
+    const hasAmount =
+      body.agreedAmount !== undefined ||
+      body.gstPct !== undefined;
+    if (hasAmount) {
+      // Pull the current row to fill in whichever field wasn't sent.
+      const current = await prisma.collaboration.findUnique({
+        where: { id },
+        select: { agreedAmount: true, gstPct: true },
+      });
+      const amt =
+        body.agreedAmount !== undefined
+          ? body.agreedAmount
+          : current?.agreedAmount
+            ? Number(current.agreedAmount)
+            : null;
+      let gst: number | null;
+      if (body.gstPct !== undefined) {
+        if (body.gstPct === "" || body.gstPct === null) {
+          gst = null;
+        } else {
+          const g = parseFloat(body.gstPct);
+          gst = isFinite(g) && g >= 0 ? g : null;
+        }
+        body.gstPct = gst;
+      } else {
+        gst = current?.gstPct ? Number(current.gstPct) : null;
+      }
+      if (typeof amt === "number" && amt > 0) {
+        body.payableAmount =
+          Math.round(amt * (1 + (gst ?? 0) / 100) * 100) / 100;
+      } else {
+        body.payableAmount = null;
+      }
+    }
+
     // Convert contentRating to number
     if (body.contentRating !== undefined && body.contentRating !== "") {
       body.contentRating = parseFloat(body.contentRating);

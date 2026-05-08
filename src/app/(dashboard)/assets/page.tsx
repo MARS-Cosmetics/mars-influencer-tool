@@ -3,61 +3,10 @@ export const dynamic = "force-dynamic";
 import { prisma } from "@/lib/db";
 import { AssetStatus, Platform } from "@/generated/prisma";
 import Link from "next/link";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Plus, Search, ExternalLink, IndianRupee } from "lucide-react";
-
-function getCPV(asset: { views: number | null; collaboration: { type: string; agreedAmount: unknown; _count: { assets: number } } | null }): string {
-  if (!asset.collaboration) return "-";
-  if (asset.collaboration.type === "barter") return "Barter";
-  if (!asset.views || asset.views === 0) return "—";
-  const totalAmount = Number(asset.collaboration.agreedAmount || 0);
-  if (totalAmount === 0) return "—";
-  const assetCount = asset.collaboration._count.assets || 1;
-  const perAssetCost = totalAmount / assetCount;
-  const cpv = perAssetCost / asset.views;
-  if (cpv < 0.01) return `₹${cpv.toFixed(4)}`;
-  if (cpv < 1) return `₹${cpv.toFixed(2)}`;
-  return `₹${cpv.toFixed(2)}`;
-}
-
-function formatNumber(value: number | null | undefined): string {
-  if (value === null || value === undefined) return "-";
-  return new Intl.NumberFormat("en-IN").format(value);
-}
-
-function platformBadgeClass(platform: string) {
-  const map: Record<string, string> = {
-    instagram: "bg-pink-100 text-pink-800",
-    youtube: "bg-red-100 text-red-800",
-    twitter: "bg-sky-100 text-sky-800",
-    linkedin: "bg-blue-100 text-blue-800",
-    blog: "bg-orange-100 text-orange-800",
-    other: "bg-gray-100 text-gray-800",
-  };
-  return map[platform] || "bg-gray-100 text-gray-800";
-}
-
-function statusBadgeClass(status: string) {
-  const map: Record<string, string> = {
-    pending: "bg-yellow-100 text-yellow-800",
-    submitted: "bg-blue-100 text-blue-800",
-    approved: "bg-green-100 text-green-800",
-    revision_requested: "bg-orange-100 text-orange-800",
-    published: "bg-emerald-100 text-emerald-800",
-    rejected: "bg-red-100 text-red-800",
-  };
-  return map[status] || "bg-gray-100 text-gray-800";
-}
+import { Plus, Search } from "lucide-react";
+import { AssetsTable, type AssetRow } from "./assets-table";
 
 export default async function AssetsPage({
   searchParams,
@@ -89,7 +38,7 @@ export default async function AssetsPage({
     where.platform = platformFilter;
   }
 
-  const assets = await prisma.asset.findMany({
+  const rawAssets = await prisma.asset.findMany({
     where,
     include: {
       influencer: { select: { id: true, name: true } },
@@ -98,6 +47,7 @@ export default async function AssetsPage({
           id: true,
           type: true,
           agreedAmount: true,
+          payableAmount: true,
           brand: { select: { name: true } },
           _count: { select: { assets: true } },
         },
@@ -105,6 +55,43 @@ export default async function AssetsPage({
     },
     orderBy: { createdAt: "desc" },
     take: 50,
+  });
+
+  // Compute per-asset amount = collab.payableAmount (gross-of-GST, what we
+  // actually pay out) divided across that collab's assets. Falls back to
+  // agreedAmount for legacy collabs that don't have payableAmount set yet.
+  const assets: AssetRow[] = rawAssets.map((a) => {
+    const collab = a.collaboration;
+    let perAssetAmount: number | null = null;
+    if (collab && collab.type !== "barter") {
+      const total = Number(collab.payableAmount ?? collab.agreedAmount ?? 0);
+      const count = collab._count.assets || 1;
+      if (total > 0) perAssetAmount = total / count;
+    }
+    return {
+      id: a.id,
+      platform: a.platform,
+      contentType: a.contentType,
+      status: a.status,
+      views: a.views,
+      likes: a.likes,
+      comments: a.comments,
+      contentRating:
+        a.contentRating != null ? Number(a.contentRating) : null,
+      publishedAt: a.publishedAt ? a.publishedAt.toISOString() : null,
+      contentUrl: a.contentUrl,
+      paymentStatus: a.paymentStatus,
+      paidAt: a.paidAt ? a.paidAt.toISOString() : null,
+      influencer: a.influencer,
+      perAssetAmount,
+      collaboration: collab
+        ? {
+            id: collab.id,
+            type: collab.type,
+            brand: collab.brand,
+          }
+        : null,
+    };
   });
 
   const statuses = Object.values(AssetStatus);
@@ -164,103 +151,7 @@ export default async function AssetsPage({
         </form>
       </div>
 
-      <div className="rounded-lg border bg-white">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Influencer</TableHead>
-              <TableHead>Platform</TableHead>
-              <TableHead>Content Type</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Views</TableHead>
-              <TableHead className="text-right">CPV</TableHead>
-              <TableHead className="text-right">Likes</TableHead>
-              <TableHead className="text-right">Comments</TableHead>
-              <TableHead className="text-right">Rating</TableHead>
-              <TableHead>Published</TableHead>
-              <TableHead>Link</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {assets.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={11} className="text-center text-gray-500 py-8">
-                  No assets found.
-                </TableCell>
-              </TableRow>
-            ) : (
-              assets.map((asset) => (
-                <TableRow key={asset.id} className="cursor-pointer hover:bg-gray-50">
-                  <TableCell className="font-medium">
-                    <Link href={`/assets/${asset.id}`} className="hover:underline">
-                      {asset.influencer.name}
-                    </Link>
-                  </TableCell>
-                  <TableCell>
-                    <Badge className={platformBadgeClass(asset.platform)}>
-                      {asset.platform}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {asset.contentType.replace(/_/g, " ")}
-                  </TableCell>
-                  <TableCell>
-                    <Badge className={statusBadgeClass(asset.status)}>
-                      {asset.status.replace(/_/g, " ")}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {formatNumber(asset.views)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {getCPV(asset) === "Barter" ? (
-                      <Badge className="bg-purple-100 text-purple-700">Barter</Badge>
-                    ) : (
-                      <span className="text-sm font-medium">{getCPV(asset)}</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {formatNumber(asset.likes)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {formatNumber(asset.comments)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {asset.contentRating != null ? (
-                      <span className="text-yellow-500 tracking-tight">
-                        {Array.from({ length: 5 }, (_, i) =>
-                          i < Number(asset.contentRating) ? "★" : ""
-                        ).join("")}
-                      </span>
-                    ) : (
-                      <span className="text-gray-400">&mdash;</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {asset.publishedAt
-                      ? new Date(asset.publishedAt).toLocaleDateString("en-IN")
-                      : "-"}
-                  </TableCell>
-                  <TableCell>
-                    {asset.contentUrl ? (
-                      <a
-                        href={asset.contentUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:text-blue-800"
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                      </a>
-                    ) : (
-                      "-"
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      <AssetsTable assets={assets} />
     </div>
   );
 }

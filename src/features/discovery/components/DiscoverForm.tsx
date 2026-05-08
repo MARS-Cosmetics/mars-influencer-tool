@@ -13,6 +13,14 @@ import { useDiscoverySearch } from "../hooks/useDiscoverySearch";
 import { useBookmarks } from "../hooks/useBookmarks";
 import type { CreatorResult, DiscoveryFilters, Platform } from "../lib/types";
 
+interface ManagedByInfo {
+  influencerId: string;
+  ownerId: string | null;
+  ownerName: string | null;
+  ownerEmail: string | null;
+  ownedAt: string | null;
+}
+
 const DEFAULT_FILTERS: DiscoveryFilters = {
   countries: ["India"],
 };
@@ -72,6 +80,40 @@ export function DiscoverForm() {
   // Creator details side panel
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsCreator, setDetailsCreator] = useState<CreatorResult | null>(null);
+
+  // Lookup which creators in the result set are already managed by another
+  // user. One batched call after the results land — same DB, ~5ms.
+  const [managedMap, setManagedMap] = useState<
+    Record<string, ManagedByInfo>
+  >({});
+
+  useEffect(() => {
+    if (!results || results.creators.length === 0) {
+      setManagedMap({});
+      return;
+    }
+    const handles = results.creators
+      .map((c) => c.username)
+      .filter((h): h is string => Boolean(h));
+    if (handles.length === 0) return;
+    let aborted = false;
+    fetch("/api/discovery/managed-by", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ handles }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { managed?: Record<string, ManagedByInfo> } | null) => {
+        if (aborted || !data?.managed) return;
+        setManagedMap(data.managed);
+      })
+      .catch(() => {
+        /* non-blocking; cards just won't show the badge */
+      });
+    return () => {
+      aborted = true;
+    };
+  }, [results]);
 
   const openDetails = (creator: CreatorResult) => {
     setDetailsCreator(creator);
@@ -208,6 +250,7 @@ export function DiscoverForm() {
                   platform={platform}
                   bookmarks={bookmarks}
                   bookmarkedIds={bookmarkedIds}
+                  managedMap={managedMap}
                   onAdd={add}
                   onRemove={remove}
                   onViewDetails={openDetails}

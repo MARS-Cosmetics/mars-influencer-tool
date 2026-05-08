@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { auth } from "@/lib/auth";
 import { createOrder, type ShopifyOrderInput } from "@/lib/shopify";
 import { withRetry } from "@/lib/shopify-retry";
+import { generatePoForParcel } from "@/lib/purchase-order/generate";
 
 export async function GET(request: Request) {
   try {
@@ -197,6 +199,26 @@ export async function POST(request: Request) {
       }
     }
 
+    // Auto-generate Purchase Order if the parcel is tied to a paid collab.
+    // Returns null silently when not eligible (no collab, barter, or no
+    // agreedAmount) — that's expected for gifting-only parcels.
+    let generatedPo: { id: string; poNumber: string } | null = null;
+    try {
+      const session = await auth();
+      const userId =
+        (session?.user as { id?: string } | undefined)?.id ?? null;
+      const po = await generatePoForParcel(parcel.id, userId);
+      if (po) {
+        generatedPo = { id: po.id, poNumber: po.poNumber };
+      }
+    } catch (poError) {
+      // PO failure must NOT block parcel creation — log and continue.
+      console.error(
+        "[PO] generation failed (non-blocking):",
+        poError,
+      );
+    }
+
     // Refetch to include any Shopify updates
     const finalParcel = await prisma.prParcel.findUnique({
       where: { id: parcel.id },
@@ -204,10 +226,14 @@ export async function POST(request: Request) {
         influencer: true,
         brand: true,
         items: { include: { product: true } },
+        purchaseOrder: true,
       },
     });
 
-    return NextResponse.json(finalParcel, { status: 201 });
+    return NextResponse.json(
+      { ...finalParcel, _po: generatedPo },
+      { status: 201 },
+    );
   } catch (error) {
     console.error("Failed to create PR parcel:", error);
     return NextResponse.json(

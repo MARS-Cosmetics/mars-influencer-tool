@@ -14,6 +14,8 @@ export async function GET(
     const influencer = await prisma.influencer.findUnique({
       where: { id },
       include: {
+        owner: { select: { id: true, name: true, email: true } },
+        creator: { select: { id: true, name: true, email: true } },
         collaborations: {
           include: {
             brand: { select: { name: true } },

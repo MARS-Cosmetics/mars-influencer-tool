@@ -185,15 +185,15 @@ enum ApprovalStatus {
 }
 
 enum PaymentTrigger {
-  on_confirmation      // when collab is confirmed
+  on_confirmation // when collab is confirmed
   on_content_submission // when content is submitted
-  on_content_approval   // when content is approved
-  on_publication        // when content is published
-  on_completion         // when collab is completed
-  net_15                // 15 days from invoice
-  net_30                // 30 days from invoice
-  net_45                // 45 days from invoice
-  custom                // manual trigger
+  on_content_approval // when content is approved
+  on_publication // when content is published
+  on_completion // when collab is completed
+  net_15 // 15 days from invoice
+  net_30 // 30 days from invoice
+  net_45 // 45 days from invoice
+  custom // manual trigger
 }
 
 enum ContentIdeaPriority {
@@ -238,15 +238,15 @@ model AllowedDomain {
 // ============================================================
 
 model User {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  email     String   @unique
-  name      String
-  password  String
-  role      UserRole @default(user)
-  avatarUrl String?  @map("avatar_url")
-  brandId   String?  @map("brand_id") @db.Uuid
-  isActive  Boolean  @default(true) @map("is_active")
-  mustChangePassword Boolean @default(true) @map("must_change_password")
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email              String    @unique
+  name               String
+  password           String
+  role               UserRole  @default(user)
+  avatarUrl          String?   @map("avatar_url")
+  brandId            String?   @map("brand_id") @db.Uuid
+  isActive           Boolean   @default(true) @map("is_active")
+  mustChangePassword Boolean   @default(true) @map("must_change_password")
   lastPasswordChange DateTime? @map("last_password_change") @db.Timestamptz()
 
   // Approval hierarchy
@@ -257,26 +257,27 @@ model User {
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 
   // Relations
-  brand                Brand?          @relation(fields: [brandId], references: [id])
-  manager              User?           @relation("UserManager", fields: [managerId], references: [id])
-  directReports        User[]          @relation("UserManager")
-  assignedCollaborations Collaboration[] @relation("AssignedCollaborations")
-  approvedCollaborations Collaboration[] @relation("ApprovedCollaborations")
-  createdInfluencers   Influencer[]    @relation("CreatedInfluencers")
-  createdCampaigns     Campaign[]      @relation("CreatedCampaigns")
-  createdCollaborations Collaboration[] @relation("CreatedCollaborations")
-  createdPrParcels     PrParcel[]      @relation("CreatedPrParcels")
-  approvedPayments     Payment[]       @relation("ApprovedPayments")
-  verifiedInvoices     Invoice[]       @relation("VerifiedInvoices")
-  createdContracts     Contract[]      @relation("CreatedContracts")
-  createdContentIdeas  ContentIdea[]   @relation("CreatedContentIdeas")
-  activityLogs         ActivityLog[]
-  statusTransitions    StatusTransition[]
-  assetReviews         AssetRevision[]
-  discoveryBookmarks   DiscoveryBookmark[]  @relation("UserDiscoveryBookmarks")
-  influencerSearches   InfluencerSearch[]   @relation("UserInfluencerSearches")
-  assignedSuggestions  InfluencerSuggestion[] @relation("UserAssignedSuggestions")
-  reviewedSuggestions  InfluencerSuggestion[] @relation("UserReviewedSuggestions")
+  brand                    Brand?                  @relation(fields: [brandId], references: [id])
+  manager                  User?                   @relation("UserManager", fields: [managerId], references: [id])
+  directReports            User[]                  @relation("UserManager")
+  assignedCollaborations   Collaboration[]         @relation("AssignedCollaborations")
+  approvedCollaborations   Collaboration[]         @relation("ApprovedCollaborations")
+  createdInfluencers       Influencer[]            @relation("CreatedInfluencers")
+  ownedInfluencers         Influencer[]            @relation("OwnedInfluencers")
+  createdCampaigns         Campaign[]              @relation("CreatedCampaigns")
+  createdCollaborations    Collaboration[]         @relation("CreatedCollaborations")
+  createdPrParcels         PrParcel[]              @relation("CreatedPrParcels")
+  approvedPayments         Payment[]               @relation("ApprovedPayments")
+  verifiedInvoices         Invoice[]               @relation("VerifiedInvoices")
+  createdContracts         Contract[]              @relation("CreatedContracts")
+  createdContentIdeas      ContentIdea[]           @relation("CreatedContentIdeas")
+  activityLogs             ActivityLog[]
+  statusTransitions        StatusTransition[]
+  assetReviews             AssetRevision[]
+  discoveryBookmarks       DiscoveryBookmark[]     @relation("UserDiscoveryBookmarks")
+  influencerSearches       InfluencerSearch[]      @relation("UserInfluencerSearches")
+  assignedSuggestions      InfluencerSuggestion[]  @relation("UserAssignedSuggestions")
+  reviewedSuggestions      InfluencerSuggestion[]  @relation("UserReviewedSuggestions")
 
   @@map("users")
 }
@@ -286,19 +287,19 @@ model User {
 // ============================================================
 
 model Brand {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name        String
-  slug        String   @unique
-  logoUrl     String?  @map("logo_url")
+  slug        String  @unique
+  logoUrl     String? @map("logo_url")
   description String?
 
   // Shopify credentials (per brand)
-  shopifyStoreUrl     String?  @map("shopify_store_url")
-  shopifyAccessToken  String?  @map("shopify_access_token")
-  shopifyApiVersion   String?  @map("shopify_api_version") @default("2024-10")
+  shopifyStoreUrl    String? @map("shopify_store_url")
+  shopifyAccessToken String? @map("shopify_access_token")
+  shopifyApiVersion  String? @default("2024-10") @map("shopify_api_version")
 
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 
   // Relations
   users          User[]
@@ -306,6 +307,7 @@ model Brand {
   collaborations Collaboration[]
   products       Product[]
   prParcels      PrParcel[]
+  purchaseOrders PurchaseOrder[]
   contracts      Contract[]
   contentIdeas   ContentIdea[]
 
@@ -317,28 +319,28 @@ model Brand {
 // ============================================================
 
 model Influencer {
-  id              String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
 
   // ===== BASIC PROFILE =====
   name            String
   email           String?
   phone           String?
-  whatsappNumber  String? @map("whatsapp_number")
+  whatsappNumber  String?   @map("whatsapp_number")
   dateOfBirth     DateTime? @map("date_of_birth") @db.Date
   gender          Gender?
   bio             String?
-  profileImageUrl String? @map("profile_image_url")
+  profileImageUrl String?   @map("profile_image_url")
 
   // ===== SOCIAL HANDLES =====
-  instagramHandle   String? @unique @map("instagram_handle")
-  instagramId       String? @map("instagram_id")
-  youtubeHandle     String? @map("youtube_handle")
-  youtubeChannelId  String? @map("youtube_channel_id")
-  twitterHandle     String? @map("twitter_handle")
-  linkedinUrl       String? @map("linkedin_url")
-  blogUrl           String? @map("blog_url")
-  tiktokHandle      String? @map("tiktok_handle")
-  snapchatHandle    String? @map("snapchat_handle")
+  instagramHandle  String? @unique @map("instagram_handle")
+  instagramId      String? @map("instagram_id")
+  youtubeHandle    String? @map("youtube_handle")
+  youtubeChannelId String? @map("youtube_channel_id")
+  twitterHandle    String? @map("twitter_handle")
+  linkedinUrl      String? @map("linkedin_url")
+  blogUrl          String? @map("blog_url")
+  tiktokHandle     String? @map("tiktok_handle")
+  snapchatHandle   String? @map("snapchat_handle")
 
   // ===== LOCATION =====
   addressLine1 String? @map("address_line1")
@@ -350,25 +352,25 @@ model Influencer {
 
   // ===== TIER & CATEGORY =====
   tier            InfluencerTier?
-  categories      String[]   // e.g., ['skincare', 'haircare', 'wellness']
-  contentNiches   String[]   @map("content_niches") // ['GRWM', 'reviews', 'tutorials']
-  languages       String[]   // ['hindi', 'english', 'tamil']
-  primaryLanguage String?    @map("primary_language")
+  categories      String[] // e.g., ['skincare', 'haircare', 'wellness']
+  contentNiches   String[]        @map("content_niches") // ['GRWM', 'reviews', 'tutorials']
+  languages       String[] // ['hindi', 'english', 'tamil']
+  primaryLanguage String?         @map("primary_language")
 
   // ===== INSTAGRAM AUTH =====
-  igAccessToken     String? @map("ig_access_token")
+  igAccessToken String? @map("ig_access_token")
 
   // ===== INSTAGRAM METRICS =====
-  igFollowerCount     Int?     @map("ig_follower_count")
-  igFollowingCount    Int?     @map("ig_following_count")
-  igPostCount         Int?     @map("ig_post_count")
-  igEngagementRate    Decimal? @map("ig_engagement_rate") @db.Decimal(5, 2)
-  igAvgLikes          Int?     @map("ig_avg_likes")
-  igAvgComments       Int?     @map("ig_avg_comments")
-  igAvgReelViews      Int?     @map("ig_avg_reel_views")
-  igAvgStoryViews     Int?     @map("ig_avg_story_views")
-  igLast8ReelViews    Int[]    @map("ig_last_8_reel_views")
-  igMedianReelViews   Int?     @map("ig_median_reel_views")
+  igFollowerCount   Int?     @map("ig_follower_count")
+  igFollowingCount  Int?     @map("ig_following_count")
+  igPostCount       Int?     @map("ig_post_count")
+  igEngagementRate  Decimal? @map("ig_engagement_rate") @db.Decimal(5, 2)
+  igAvgLikes        Int?     @map("ig_avg_likes")
+  igAvgComments     Int?     @map("ig_avg_comments")
+  igAvgReelViews    Int?     @map("ig_avg_reel_views")
+  igAvgStoryViews   Int?     @map("ig_avg_story_views")
+  igLast8ReelViews  Int[]    @map("ig_last_8_reel_views")
+  igMedianReelViews Int?     @map("ig_median_reel_views")
 
   // ===== INSTAGRAM AUDIENCE DEMOGRAPHICS =====
   igAudienceMalePct       Decimal? @map("ig_audience_male_pct") @db.Decimal(5, 2)
@@ -381,33 +383,33 @@ model Influencer {
   igCredibilityScore      Decimal? @map("ig_credibility_score") @db.Decimal(5, 2)
 
   // ===== YOUTUBE METRICS =====
-  ytSubscriberCount       Int?     @map("yt_subscriber_count")
-  ytTotalViews            Int?     @map("yt_total_views")
-  ytAvgViews              Int?     @map("yt_avg_views")
-  ytEngagementRate        Decimal? @map("yt_engagement_rate") @db.Decimal(5, 2)
-  ytLast8VideoViews       Int[]    @map("yt_last_8_video_views")
-  ytMedianVideoViews      Int?     @map("yt_median_video_views")
-  ytAudienceMalePct       Decimal? @map("yt_audience_male_pct") @db.Decimal(5, 2)
-  ytAudienceFemalePct     Decimal? @map("yt_audience_female_pct") @db.Decimal(5, 2)
-  ytAudienceAgeBreakdown  Json?    @map("yt_audience_age_breakdown")
-  ytAudienceTopCountries  Json?    @map("yt_audience_top_countries")
+  ytSubscriberCount      Int?     @map("yt_subscriber_count")
+  ytTotalViews           Int?     @map("yt_total_views")
+  ytAvgViews             Int?     @map("yt_avg_views")
+  ytEngagementRate       Decimal? @map("yt_engagement_rate") @db.Decimal(5, 2)
+  ytLast8VideoViews      Int[]    @map("yt_last_8_video_views")
+  ytMedianVideoViews     Int?     @map("yt_median_video_views")
+  ytAudienceMalePct      Decimal? @map("yt_audience_male_pct") @db.Decimal(5, 2)
+  ytAudienceFemalePct    Decimal? @map("yt_audience_female_pct") @db.Decimal(5, 2)
+  ytAudienceAgeBreakdown Json?    @map("yt_audience_age_breakdown")
+  ytAudienceTopCountries Json?    @map("yt_audience_top_countries")
 
   // ===== SOCIAL SCORE & QUALITY =====
-  socialScore          Decimal? @map("social_score") @db.Decimal(5, 2)
-  brandAffinityScore   Decimal? @map("brand_affinity_score") @db.Decimal(5, 2)
-  contentQualityScore  Decimal? @map("content_quality_score") @db.Decimal(5, 2)
-  reliabilityScore     Decimal? @map("reliability_score") @db.Decimal(5, 2)
-  pastCollabCount      Int      @default(0) @map("past_collab_count")
-  isVerified           Boolean  @default(false) @map("is_verified")
+  socialScore         Decimal? @map("social_score") @db.Decimal(5, 2)
+  brandAffinityScore  Decimal? @map("brand_affinity_score") @db.Decimal(5, 2)
+  contentQualityScore Decimal? @map("content_quality_score") @db.Decimal(5, 2)
+  reliabilityScore    Decimal? @map("reliability_score") @db.Decimal(5, 2)
+  pastCollabCount     Int      @default(0) @map("past_collab_count")
+  isVerified          Boolean  @default(false) @map("is_verified")
 
   // ===== FINANCIAL DETAILS =====
-  panNumber         String? @map("pan_number")
+  panNumber         String?            @map("pan_number")
   gstin             String?
-  bankAccountName   String? @map("bank_account_name")
-  bankAccountNumber String? @map("bank_account_number")
-  bankIfscCode      String? @map("bank_ifsc_code")
-  bankName          String? @map("bank_name")
-  upiId             String? @map("upi_id")
+  bankAccountName   String?            @map("bank_account_name")
+  bankAccountNumber String?            @map("bank_account_number")
+  bankIfscCode      String?            @map("bank_ifsc_code")
+  bankName          String?            @map("bank_name")
+  upiId             String?            @map("upi_id")
   paymentPreference PaymentPreference? @default(bank_transfer) @map("payment_preference")
 
   // ===== RATE CARD =====
@@ -423,24 +425,34 @@ model Influencer {
 
   // ===== ONBOARDING =====
   source          InfluencerSource?
-  referredBy      String?  @map("referred_by")
-  agencyId        String?  @map("agency_id") @db.Uuid
-  managedBy       String?  @default("self") @map("managed_by") // "self" or "agency"
-  status          InfluencerStatus @default(discovered)
-  onboardedAt     DateTime? @map("onboarded_at") @db.Timestamptz()
-  blacklistReason String?   @map("blacklist_reason")
+  referredBy      String?           @map("referred_by")
+  agencyId        String?           @map("agency_id") @db.Uuid
+  managedBy       String?           @default("self") @map("managed_by") // "self" or "agency"
+  status          InfluencerStatus  @default(discovered)
+  onboardedAt     DateTime?         @map("onboarded_at") @db.Timestamptz()
+  blacklistReason String?           @map("blacklist_reason")
+
+  // Vendor code generated on first PO. Cached so subsequent POs reuse the
+  // same code. Format: VEN-NNNNN.
+  vendorCode      String?           @unique @map("vendor_code")
 
   // ===== TAGS & NOTES =====
-  tags           String[]
-  internalNotes  String? @map("internal_notes")
+  tags          String[]
+  internalNotes String?  @map("internal_notes")
 
   // ===== FLEXIBLE DATA =====
-  platformAnalytics  Json?   @map("platform_analytics")
-  metadata           Json?
-  culturexProfileId  String? @map("culturex_profile_id")
+  platformAnalytics Json?   @map("platform_analytics")
+  metadata          Json?
+  culturexProfileId String? @map("culturex_profile_id")
 
   // ===== DATA FRESHNESS =====
   metricsLastSyncedAt DateTime? @map("metrics_last_synced_at") @db.Timestamptz()
+
+  // ===== OWNERSHIP =====
+  // Org-wide exclusive lock. When set, no other user can add this creator
+  // as a new influencer. Null = unowned (legacy rows or after release).
+  ownerId String?   @map("owner_id") @db.Uuid
+  ownedAt DateTime? @map("owned_at") @db.Timestamptz()
 
   // ===== AUDIT =====
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
@@ -448,16 +460,18 @@ model Influencer {
   createdBy String?  @map("created_by") @db.Uuid
 
   // Relations
-  creator        User?             @relation("CreatedInfluencers", fields: [createdBy], references: [id])
-  agency         Agency?           @relation(fields: [agencyId], references: [id])
-  collaborations Collaboration[]
-  prParcels      PrParcel[]
-  assets         Asset[]
-  payments       Payment[]
-  invoices       Invoice[]
-  contracts      Contract[]
-  contentIdeas   ContentIdea[]
+  creator           User?                  @relation("CreatedInfluencers", fields: [createdBy], references: [id])
+  owner             User?                  @relation("OwnedInfluencers", fields: [ownerId], references: [id])
+  agency            Agency?                @relation(fields: [agencyId], references: [id])
+  collaborations    Collaboration[]
+  prParcels         PrParcel[]
+  assets            Asset[]
+  payments          Payment[]
+  invoices          Invoice[]
+  contracts         Contract[]
+  contentIdeas      ContentIdea[]
   sourceSuggestions InfluencerSuggestion[] @relation("SuggestionPromotedInfluencer")
+  purchaseOrders    PurchaseOrder[]
 
   @@index([instagramHandle])
   @@index([tier])
@@ -465,6 +479,7 @@ model Influencer {
   @@index([city])
   @@index([socialScore])
   @@index([igFollowerCount])
+  @@index([ownerId])
   @@index([categories], type: Gin)
   @@index([tags], type: Gin)
   @@map("influencers")
@@ -499,10 +514,10 @@ model Campaign {
   createdBy String?  @map("created_by") @db.Uuid
 
   // Relations
-  brand          Brand           @relation(fields: [brandId], references: [id])
-  creator        User?           @relation("CreatedCampaigns", fields: [createdBy], references: [id])
-  collaborations Collaboration[]
-  contentIdeas   ContentIdea[]
+  brand              Brand               @relation(fields: [brandId], references: [id])
+  creator            User?               @relation("CreatedCampaigns", fields: [createdBy], references: [id])
+  collaborations     Collaboration[]
+  contentIdeas       ContentIdea[]
   discoveryBookmarks DiscoveryBookmark[]
   influencerSearches InfluencerSearch[]
 
@@ -514,11 +529,11 @@ model Campaign {
 // ============================================================
 
 model Collaboration {
-  id           String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  influencerId String              @map("influencer_id") @db.Uuid
-  brandId      String              @map("brand_id") @db.Uuid
-  campaignId   String?             @map("campaign_id") @db.Uuid
-  assignedTo   String              @map("assigned_to") @db.Uuid
+  id           String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  influencerId String  @map("influencer_id") @db.Uuid
+  brandId      String  @map("brand_id") @db.Uuid
+  campaignId   String? @map("campaign_id") @db.Uuid
+  assignedTo   String  @map("assigned_to") @db.Uuid
 
   // Type & Status
   type   CollaborationType
@@ -526,35 +541,42 @@ model Collaboration {
 
   // Commercials
   agreedAmount  Decimal? @map("agreed_amount") @db.Decimal(12, 2)
+  // GST applied on top of agreedAmount (Option A — gross-of-GST). Common
+  // Indian slabs: 0, 5, 12, 18, 28. Null = no GST applied.
+  gstPct        Decimal? @map("gst_pct") @db.Decimal(5, 2)
+  // Persisted = agreedAmount × (1 + gstPct/100). Stored (not computed on read)
+  // because PO generation downstream reads this value directly and we want
+  // the rate snapshotted at deal-time even if defaults later change.
+  payableAmount Decimal? @map("payable_amount") @db.Decimal(12, 2)
   currency      String?  @default("INR")
   paymentTermId String?  @map("payment_term_id") @db.Uuid
 
   // Content specification
-  platform        Platform?
-  contentType     ContentType?    @map("content_type")
-  deliverableCount Int?           @map("deliverable_count") // e.g., 2 reels
-  deliverables    Json?           // structured: [{platform, contentType, count}]
-  brief           String?
+  platform         Platform?
+  contentType      ContentType? @map("content_type")
+  deliverableCount Int?         @map("deliverable_count") // e.g., 2 reels
+  deliverables     Json? // structured: [{platform, contentType, count}]
+  brief            String?
 
   // Shopify order
-  shopifyOrderId     String?  @map("shopify_order_id")
-  shopifyOrderNumber String?  @map("shopify_order_number")
-  shopifyOrderStatus String?  @map("shopify_order_status") // unfulfilled, fulfilled, cancelled
-  shopifyTrackingId  String?  @map("shopify_tracking_id")
-  shopifyTrackingUrl String?  @map("shopify_tracking_url")
-  shopifyFulfillmentStatus String? @map("shopify_fulfillment_status")
-  shopifyLastSyncAt  DateTime? @map("shopify_last_sync_at") @db.Timestamptz()
+  shopifyOrderId           String?   @map("shopify_order_id")
+  shopifyOrderNumber       String?   @map("shopify_order_number")
+  shopifyOrderStatus       String?   @map("shopify_order_status") // unfulfilled, fulfilled, cancelled
+  shopifyTrackingId        String?   @map("shopify_tracking_id")
+  shopifyTrackingUrl       String?   @map("shopify_tracking_url")
+  shopifyFulfillmentStatus String?   @map("shopify_fulfillment_status")
+  shopifyLastSyncAt        DateTime? @map("shopify_last_sync_at") @db.Timestamptz()
 
   // Timeline - auto-computed from latest asset dueDate
   dueDate DateTime? @map("due_date") @db.Date
 
   // Agency snapshot (frozen at collaboration time)
-  agencyId              String?  @map("agency_id") @db.Uuid
-  agencyNameSnapshot    String?  @map("agency_name_snapshot")
-  agencyCommissionPct   Decimal? @map("agency_commission_pct") @db.Decimal(5, 2)
+  agencyId            String?  @map("agency_id") @db.Uuid
+  agencyNameSnapshot  String?  @map("agency_name_snapshot")
+  agencyCommissionPct Decimal? @map("agency_commission_pct") @db.Decimal(5, 2)
 
   // Approval workflow
-  approvalStatus ApprovalStatus? @map("approval_status") @default(auto_approved)
+  approvalStatus ApprovalStatus? @default(auto_approved) @map("approval_status")
   approvedBy     String?         @map("approved_by") @db.Uuid
   approvedAt     DateTime?       @map("approved_at") @db.Timestamptz()
   approvalNotes  String?         @map("approval_notes")
@@ -564,27 +586,28 @@ model Collaboration {
   ratingNotes   String?  @map("rating_notes")
 
   // Audit
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
-  createdBy String?  @map("created_by") @db.Uuid
-  requiresContentApproval Boolean @default(true) @map("requires_content_approval")
+  createdAt               DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt               DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+  createdBy               String?  @map("created_by") @db.Uuid
+  requiresContentApproval Boolean  @default(true) @map("requires_content_approval")
 
   // Relations
-  influencer  Influencer             @relation(fields: [influencerId], references: [id])
-  brand       Brand                  @relation(fields: [brandId], references: [id])
-  campaign    Campaign?              @relation(fields: [campaignId], references: [id])
-  assignee    User                   @relation("AssignedCollaborations", fields: [assignedTo], references: [id])
-  approver    User?                  @relation("ApprovedCollaborations", fields: [approvedBy], references: [id])
-  creator     User?                  @relation("CreatedCollaborations", fields: [createdBy], references: [id])
-  agency      Agency?                @relation(fields: [agencyId], references: [id])
-  paymentTerm PaymentTerm?           @relation(fields: [paymentTermId], references: [id])
-  products    CollaborationProduct[]
-  assets      Asset[]
-  payments    Payment[]
-  invoices    Invoice[]
-  prParcels   PrParcel[]
-  contracts    Contract[]
-  contentIdeas ContentIdea[]
+  influencer        Influencer             @relation(fields: [influencerId], references: [id])
+  brand             Brand                  @relation(fields: [brandId], references: [id])
+  campaign          Campaign?              @relation(fields: [campaignId], references: [id])
+  assignee          User                   @relation("AssignedCollaborations", fields: [assignedTo], references: [id])
+  approver          User?                  @relation("ApprovedCollaborations", fields: [approvedBy], references: [id])
+  creator           User?                  @relation("CreatedCollaborations", fields: [createdBy], references: [id])
+  agency            Agency?                @relation(fields: [agencyId], references: [id])
+  paymentTerm       PaymentTerm?           @relation(fields: [paymentTermId], references: [id])
+  products          CollaborationProduct[]
+  assets            Asset[]
+  payments          Payment[]
+  invoices          Invoice[]
+  prParcels         PrParcel[]
+  purchaseOrders    PurchaseOrder[]
+  contracts         Contract[]
+  contentIdeas      ContentIdea[]
   statusTransitions StatusTransition[]
 
   @@index([assignedTo])
@@ -601,31 +624,31 @@ model Collaboration {
 // ============================================================
 
 model Product {
-  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  brandId          String   @map("brand_id") @db.Uuid
-  name             String
-  sku              String?
-  description      String?
-  mrp              Decimal? @db.Decimal(10, 2)
-  imageUrl         String?  @map("image_url")
-  category         String?
-  isActive         Boolean  @default(true) @map("is_active")
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  brandId     String   @map("brand_id") @db.Uuid
+  name        String
+  sku         String?
+  description String?
+  mrp         Decimal? @db.Decimal(10, 2)
+  imageUrl    String?  @map("image_url")
+  category    String?
+  isActive    Boolean  @default(true) @map("is_active")
 
   // Shopify sync
-  shopifyProductId  String?  @map("shopify_product_id")
-  shopifyVariantId  String?  @unique @map("shopify_variant_id")
-  shopifyInventoryItemId String? @map("shopify_inventory_item_id")
-  inventoryQuantity Int?     @map("inventory_quantity")
-  shopifyImageUrl   String?  @map("shopify_image_url")
-  shopifyLastSyncAt DateTime? @map("shopify_last_sync_at") @db.Timestamptz()
+  shopifyProductId       String?   @map("shopify_product_id")
+  shopifyVariantId       String?   @unique @map("shopify_variant_id")
+  shopifyInventoryItemId String?   @map("shopify_inventory_item_id")
+  inventoryQuantity      Int?      @map("inventory_quantity")
+  shopifyImageUrl        String?   @map("shopify_image_url")
+  shopifyLastSyncAt      DateTime? @map("shopify_last_sync_at") @db.Timestamptz()
 
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 
   // Relations
-  brand                Brand                  @relation(fields: [brandId], references: [id])
+  brand                 Brand                  @relation(fields: [brandId], references: [id])
   collaborationProducts CollaborationProduct[]
-  prParcelItems        PrParcelItem[]
+  prParcelItems         PrParcelItem[]
 
   @@map("products")
 }
@@ -656,10 +679,10 @@ model CollaborationProduct {
 // ============================================================
 
 model PrParcel {
-  id              String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  influencerId    String       @map("influencer_id") @db.Uuid
-  brandId         String       @map("brand_id") @db.Uuid
-  collaborationId String?      @map("collaboration_id") @db.Uuid
+  id              String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  influencerId    String  @map("influencer_id") @db.Uuid
+  brandId         String  @map("brand_id") @db.Uuid
+  collaborationId String? @map("collaboration_id") @db.Uuid
 
   // Shipping
   shippingAddress String? @map("shipping_address")
@@ -689,6 +712,7 @@ model PrParcel {
   collaboration Collaboration? @relation(fields: [collaborationId], references: [id])
   creator       User?          @relation("CreatedPrParcels", fields: [createdBy], references: [id])
   items         PrParcelItem[]
+  purchaseOrder PurchaseOrder?
 
   @@index([influencerId])
   @@index([brandId])
@@ -716,13 +740,75 @@ model PrParcelItem {
 }
 
 // ============================================================
+// PURCHASE ORDER — Generated when a PR parcel ships against a paid collab.
+// Snapshots vendor + tax fields at generation time so the document is
+// immutable per Indian invoicing rules.
+// ============================================================
+
+model PurchaseOrder {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  poNumber        String   @unique @map("po_number") // PO/26-27/0000112
+  fiscalYear      String   @map("fiscal_year") // 26-27
+  sequence        Int // 112
+
+  // Source
+  prParcelId      String?  @unique @map("pr_parcel_id") @db.Uuid
+  collaborationId String   @map("collaboration_id") @db.Uuid
+  influencerId   String   @map("influencer_id") @db.Uuid
+  brandId        String   @map("brand_id") @db.Uuid
+
+  // Vendor snapshot (frozen at PO generation)
+  vendorCodeSnapshot    String  @map("vendor_code_snapshot")
+  vendorNameSnapshot    String  @map("vendor_name_snapshot")
+  vendorPanSnapshot     String? @map("vendor_pan_snapshot")
+  vendorGstinSnapshot   String? @map("vendor_gstin_snapshot")
+  vendorAddressSnapshot String? @map("vendor_address_snapshot")
+  vendorStateSnapshot   String? @map("vendor_state_snapshot")
+  vendorPincodeSnapshot String? @map("vendor_pincode_snapshot")
+  vendorPhoneSnapshot   String? @map("vendor_phone_snapshot")
+
+  // Line item — single row, professional fees per agreement
+  lineItemDescription String  @default("PROFESSIONAL FEES") @map("line_item_description")
+  hsnCode             String  @default("998361") @map("hsn_code")
+  quantity            Int     @default(1)
+  basePrice           Decimal @map("base_price") @db.Decimal(12, 2)
+  taxRate             Decimal @map("tax_rate") @db.Decimal(5, 2) // 18.00
+
+  // Tax split — only one of these is non-zero based on inter-state vs intra-state
+  igstAmount Decimal @default(0) @map("igst_amount") @db.Decimal(12, 2)
+  cgstAmount Decimal @default(0) @map("cgst_amount") @db.Decimal(12, 2)
+  sgstAmount Decimal @default(0) @map("sgst_amount") @db.Decimal(12, 2)
+
+  taxableAmount Decimal @map("taxable_amount") @db.Decimal(12, 2)
+  totalTax      Decimal @map("total_tax") @db.Decimal(12, 2)
+  roundOff      Decimal @default(0) @map("round_off") @db.Decimal(8, 2)
+  grandTotal    Decimal @map("grand_total") @db.Decimal(12, 2)
+
+  // Audit
+  poDate     DateTime @default(now()) @map("po_date") @db.Date
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  generatedBy String? @map("generated_by") @db.Uuid
+
+  // Relations
+  prParcel      PrParcel?     @relation(fields: [prParcelId], references: [id])
+  collaboration Collaboration @relation(fields: [collaborationId], references: [id])
+  influencer    Influencer    @relation(fields: [influencerId], references: [id])
+  brand         Brand         @relation(fields: [brandId], references: [id])
+
+  @@index([fiscalYear, sequence])
+  @@index([collaborationId])
+  @@index([influencerId])
+  @@map("purchase_orders")
+}
+
+// ============================================================
 // 10. ASSETS — Content pieces across all platforms
 // ============================================================
 
 model Asset {
-  id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  collaborationId String      @map("collaboration_id") @db.Uuid
-  influencerId    String      @map("influencer_id") @db.Uuid
+  id              String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collaborationId String @map("collaboration_id") @db.Uuid
+  influencerId    String @map("influencer_id") @db.Uuid
 
   // Content details
   platform    Platform
@@ -756,12 +842,18 @@ model Asset {
   hasAdRights Boolean @default(false) @map("has_ad_rights")
 
   // Viral Tracking
-  isViral          Boolean   @default(false) @map("is_viral")
-  viralMultiplier  Decimal?  @map("viral_multiplier") @db.Decimal(6, 2)
-  peakViews        Int?      @map("peak_views")
-  metricsSnapshot  Json?     @map("metrics_snapshot")  // { "24h": {...}, "48h": {...}, "7d": {...} }
-  baselineMetrics  Json?     @map("baseline_metrics")  // influencer's avg at time of posting
-  viralDetectedAt  DateTime? @map("viral_detected_at") @db.Timestamptz()
+  isViral         Boolean   @default(false) @map("is_viral")
+  viralMultiplier Decimal?  @map("viral_multiplier") @db.Decimal(6, 2)
+  peakViews       Int?      @map("peak_views")
+  metricsSnapshot Json?     @map("metrics_snapshot") // { "24h": {...}, "48h": {...}, "7d": {...} }
+  baselineMetrics Json?     @map("baseline_metrics") // influencer's avg at time of posting
+  viralDetectedAt DateTime? @map("viral_detected_at") @db.Timestamptz()
+
+  // Per-asset payment tracking. Independent of the existing collab-level
+  // Payment model — we mark assets as paid in bulk via the /assets list
+  // multi-select flow, payment-gateway integration plugs in later.
+  paymentStatus AssetPaymentStatus @default(unpaid) @map("payment_status")
+  paidAt        DateTime?          @map("paid_at") @db.Timestamptz()
 
   // Audit
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
@@ -770,8 +862,8 @@ model Asset {
   version Int @default(1)
 
   // Relations
-  collaboration Collaboration @relation(fields: [collaborationId], references: [id])
-  influencer    Influencer    @relation(fields: [influencerId], references: [id])
+  collaboration Collaboration   @relation(fields: [collaborationId], references: [id])
+  influencer    Influencer      @relation(fields: [influencerId], references: [id])
   revisions     AssetRevision[]
 
   @@index([isViral])
@@ -779,7 +871,14 @@ model Asset {
   @@index([influencerId, createdAt])
   @@index([isViral, viralDetectedAt])
   @@index([publishedAt, status])
+  @@index([paymentStatus])
   @@map("assets")
+}
+
+enum AssetPaymentStatus {
+  unpaid
+  pending
+  paid
 }
 
 // ============================================================
@@ -787,12 +886,12 @@ model Asset {
 // ============================================================
 
 model AssetRevision {
-  id        String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  assetId   String @map("asset_id") @db.Uuid
-  version   Int
+  id      String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  assetId String @map("asset_id") @db.Uuid
+  version Int
 
   // Content reference (external URL - no file storage)
-  contentUrl  String  @map("content_url")  // Google Drive / Dropbox link
+  contentUrl String @map("content_url") // Google Drive / Dropbox link
 
   // Review
   status     String  @default("submitted") // submitted, approved, revision_requested, rejected
@@ -800,7 +899,7 @@ model AssetRevision {
   reviewedBy String? @map("reviewed_by") @db.Uuid
 
   // Timestamps
-  submittedAt DateTime @default(now()) @map("submitted_at") @db.Timestamptz()
+  submittedAt DateTime  @default(now()) @map("submitted_at") @db.Timestamptz()
   reviewedAt  DateTime? @map("reviewed_at") @db.Timestamptz()
 
   // Relations
@@ -827,7 +926,7 @@ model StatusTransition {
 
   // Auto-actions that were executed
   autoActionsExecuted Json? @map("auto_actions_executed") // ["create_shopify_order", "create_payment_entries"]
-  autoActionErrors    Json? @map("auto_action_errors")    // any errors from auto-actions
+  autoActionErrors    Json? @map("auto_action_errors") // any errors from auto-actions
 
   // Context at time of transition
   notes String?
@@ -848,9 +947,9 @@ model StatusTransition {
 // ============================================================
 
 model Payment {
-  id              String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  collaborationId String @map("collaboration_id") @db.Uuid
-  influencerId    String @map("influencer_id") @db.Uuid
+  id              String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collaborationId String  @map("collaboration_id") @db.Uuid
+  influencerId    String  @map("influencer_id") @db.Uuid
   invoiceId       String? @map("invoice_id") @db.Uuid
 
   // Amount
@@ -863,18 +962,18 @@ model Payment {
   netAmount     Decimal? @map("net_amount") @db.Decimal(12, 2)
 
   // Payment details
-  paymentMethod  PaymentMethod?  @map("payment_method")
-  transactionRef String?         @map("transaction_ref")
-  trigger        PaymentTrigger? // when this payment is due
-  installmentLabel String?       @map("installment_label") // e.g., "Advance", "On Approval"
+  paymentMethod    PaymentMethod?  @map("payment_method")
+  transactionRef   String?         @map("transaction_ref")
+  trigger          PaymentTrigger? // when this payment is due
+  installmentLabel String?         @map("installment_label") // e.g., "Advance", "On Approval"
 
   // Status
   status PaymentStatus @default(pending)
   paidAt DateTime?     @map("paid_at") @db.Timestamptz()
 
   // Agency payment
-  agencyId              String?  @map("agency_id") @db.Uuid
-  agencyCommissionPct   Decimal? @map("agency_commission_pct") @db.Decimal(5, 2)
+  agencyId               String?  @map("agency_id") @db.Uuid
+  agencyCommissionPct    Decimal? @map("agency_commission_pct") @db.Decimal(5, 2)
   agencyCommissionAmount Decimal? @map("agency_commission_amount") @db.Decimal(12, 2)
 
   // Business Central
@@ -908,13 +1007,13 @@ model Invoice {
   influencerId    String @map("influencer_id") @db.Uuid
 
   // Invoice details
-  invoiceNumber String   @unique @map("invoice_number")
-  invoiceDate   DateTime @map("invoice_date") @db.Date
+  invoiceNumber String    @unique @map("invoice_number")
+  invoiceDate   DateTime  @map("invoice_date") @db.Date
   dueDate       DateTime? @map("due_date") @db.Date
-  amount        Decimal  @db.Decimal(12, 2)
-  taxAmount     Decimal? @default(0) @map("tax_amount") @db.Decimal(12, 2)
-  totalAmount   Decimal  @map("total_amount") @db.Decimal(12, 2)
-  currency      String?  @default("INR")
+  amount        Decimal   @db.Decimal(12, 2)
+  taxAmount     Decimal?  @default(0) @map("tax_amount") @db.Decimal(12, 2)
+  totalAmount   Decimal   @map("total_amount") @db.Decimal(12, 2)
+  currency      String?   @default("INR")
 
   // File
   fileUrl String? @map("file_url")
@@ -944,8 +1043,8 @@ model Invoice {
 // ============================================================
 
 model Contract {
-  id              String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  influencerId    String @map("influencer_id") @db.Uuid
+  id              String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  influencerId    String  @map("influencer_id") @db.Uuid
   brandId         String? @map("brand_id") @db.Uuid
   collaborationId String? @map("collaboration_id") @db.Uuid
 
@@ -1013,28 +1112,28 @@ model Agency {
   isActive      Boolean  @default(true) @map("is_active")
 
   // New KYC & Business fields
-  businessType      String?  @map("business_type") // Proprietorship, Partnership, LLP, Pvt Ltd, etc.
-  yearsInBusiness   Int?     @map("years_in_business")
-  annualTurnover    String?  @map("annual_turnover") // range bracket
-  directorName      String?  @map("director_name")
-  directorAadhar    String?  @map("director_aadhar")
+  businessType    String? @map("business_type") // Proprietorship, Partnership, LLP, Pvt Ltd, etc.
+  yearsInBusiness Int?    @map("years_in_business")
+  annualTurnover  String? @map("annual_turnover") // range bracket
+  directorName    String? @map("director_name")
+  directorAadhar  String? @map("director_aadhar")
 
   // Bank Details
-  bankName          String?  @map("bank_name")
-  bankAccountNumber String?  @map("bank_account_number")
-  bankIfsc          String?  @map("bank_ifsc")
-  bankBranch        String?  @map("bank_branch")
-  bankAccountType   String?  @map("bank_account_type") // Current / Savings
+  bankName          String? @map("bank_name")
+  bankAccountNumber String? @map("bank_account_number")
+  bankIfsc          String? @map("bank_ifsc")
+  bankBranch        String? @map("bank_branch")
+  bankAccountType   String? @map("bank_account_type") // Current / Savings
 
   // Document uploads (file paths/URLs)
-  panDocumentUrl        String?  @map("pan_document_url")
-  gstDocumentUrl        String?  @map("gst_document_url")
-  udhyamCertificateUrl  String?  @map("udhyam_certificate_url")
-  agencyRosterUrl       String?  @map("agency_roster_url")
-  aadharDocumentUrl     String?  @map("aadhar_document_url")
+  panDocumentUrl       String? @map("pan_document_url")
+  gstDocumentUrl       String? @map("gst_document_url")
+  udhyamCertificateUrl String? @map("udhyam_certificate_url")
+  agencyRosterUrl      String? @map("agency_roster_url")
+  aadharDocumentUrl    String? @map("aadhar_document_url")
 
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 
   // Relations
   influencers    Influencer[]
@@ -1049,8 +1148,8 @@ model Agency {
 // ============================================================
 
 model PaymentTerm {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name        String   @unique // e.g., "100% Advance", "50-50 Split", "Net 30"
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String  @unique // e.g., "100% Advance", "50-50 Split", "Net 30"
   description String?
 
   // Installment breakdown as JSON array
@@ -1058,10 +1157,10 @@ model PaymentTerm {
   //        {"percentage": 50, "trigger": "on_content_approval", "label": "On Approval"}]
   installments Json
 
-  isDefault   Boolean  @default(false) @map("is_default")
-  isActive    Boolean  @default(true) @map("is_active")
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+  isDefault Boolean  @default(false) @map("is_default")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 
   // Relations
   collaborations Collaboration[]
@@ -1074,44 +1173,44 @@ model PaymentTerm {
 // ============================================================
 
 model ContentIdea {
-  id              String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
 
   // Core
-  title           String
-  description     String?
-  theme           ContentTheme       @default(other)
-  platform        Platform?
-  contentType     ContentType?       @map("content_type")
+  title       String
+  description String?
+  theme       ContentTheme @default(other)
+  platform    Platform?
+  contentType ContentType? @map("content_type")
 
   // Status & Priority
-  status          ContentIdeaStatus  @default(idea)
-  priority        ContentIdeaPriority? @default(medium)
+  status   ContentIdeaStatus    @default(idea)
+  priority ContentIdeaPriority? @default(medium)
 
   // Relations
-  brandId         String?            @map("brand_id") @db.Uuid
-  campaignId      String?            @map("campaign_id") @db.Uuid
-  collaborationId String?            @map("collaboration_id") @db.Uuid
-  influencerId    String?            @map("influencer_id") @db.Uuid
+  brandId         String? @map("brand_id") @db.Uuid
+  campaignId      String? @map("campaign_id") @db.Uuid
+  collaborationId String? @map("collaboration_id") @db.Uuid
+  influencerId    String? @map("influencer_id") @db.Uuid
 
   // Reference material
-  referenceUrls   String[]           @map("reference_urls")
-  moodboardUrl    String?            @map("moodboard_url")
-  notes           String?
+  referenceUrls String[] @map("reference_urls")
+  moodboardUrl  String?  @map("moodboard_url")
+  notes         String?
 
   // Timeline
-  targetDate      DateTime?          @map("target_date") @db.Date
+  targetDate DateTime? @map("target_date") @db.Date
 
   // Audit
-  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt       DateTime           @updatedAt @map("updated_at") @db.Timestamptz()
-  createdBy       String?            @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+  createdBy String?  @map("created_by") @db.Uuid
 
   // Relations
-  brand           Brand?             @relation(fields: [brandId], references: [id])
-  campaign        Campaign?          @relation(fields: [campaignId], references: [id])
-  collaboration   Collaboration?     @relation(fields: [collaborationId], references: [id])
-  influencer      Influencer?        @relation(fields: [influencerId], references: [id])
-  creator         User?              @relation("CreatedContentIdeas", fields: [createdBy], references: [id])
+  brand         Brand?         @relation(fields: [brandId], references: [id])
+  campaign      Campaign?      @relation(fields: [campaignId], references: [id])
+  collaboration Collaboration? @relation(fields: [collaborationId], references: [id])
+  influencer    Influencer?    @relation(fields: [influencerId], references: [id])
+  creator       User?          @relation("CreatedContentIdeas", fields: [createdBy], references: [id])
 
   @@index([brandId])
   @@index([campaignId])
@@ -1125,17 +1224,17 @@ model ContentIdea {
 // ============================================================
 
 model SyncLog {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  syncType   String   @map("sync_type") // products, inventory, orders, tracking
-  status     String   @default("running") // running, completed, failed
-  triggeredBy String? @map("triggered_by") // "cron" or user ID
-  startedAt  DateTime @default(now()) @map("started_at") @db.Timestamptz()
-  completedAt DateTime? @map("completed_at") @db.Timestamptz()
-  itemsProcessed Int?  @map("items_processed")
-  itemsCreated   Int?  @map("items_created")
-  itemsUpdated   Int?  @map("items_updated")
-  itemsFailed    Int?  @map("items_failed")
-  errorMessage   String? @map("error_message")
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  syncType       String    @map("sync_type") // products, inventory, orders, tracking
+  status         String    @default("running") // running, completed, failed
+  triggeredBy    String?   @map("triggered_by") // "cron" or user ID
+  startedAt      DateTime  @default(now()) @map("started_at") @db.Timestamptz()
+  completedAt    DateTime? @map("completed_at") @db.Timestamptz()
+  itemsProcessed Int?      @map("items_processed")
+  itemsCreated   Int?      @map("items_created")
+  itemsUpdated   Int?      @map("items_updated")
+  itemsFailed    Int?      @map("items_failed")
+  errorMessage   String?   @map("error_message")
   details        Json?
 
   @@index([syncType])
@@ -1148,17 +1247,17 @@ model SyncLog {
 // ============================================================
 
 model ActivityLog {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId     String?  @map("user_id") @db.Uuid
-  entityType String   @map("entity_type") // collaboration, influencer, etc.
-  entityId   String   @map("entity_id") @db.Uuid
-  action     String   // status_change, field_update, product_added, comment, created, etc.
-  field      String?  // which field changed (e.g. "status", "agreedAmount")
-  oldValue   String?  @map("old_value")
-  newValue   String?  @map("new_value")
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String?  @map("user_id") @db.Uuid
+  entityType  String   @map("entity_type") // collaboration, influencer, etc.
+  entityId    String   @map("entity_id") @db.Uuid
+  action      String // status_change, field_update, product_added, comment, created, etc.
+  field       String? // which field changed (e.g. "status", "agreedAmount")
+  oldValue    String?  @map("old_value")
+  newValue    String?  @map("new_value")
   description String? // human-readable summary
-  changes    Json?
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  changes     Json?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
   // Relations
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -1190,7 +1289,7 @@ model DiscoveryBookmark {
   id              String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId          String         @map("user_id") @db.Uuid
   campaignId      String         @map("campaign_id") @db.Uuid
-  platform        String         // "instagram" | "youtube" | "tiktok"
+  platform        String // "instagram" | "youtube" | "tiktok"
   externalUserId  String         @map("external_user_id") // Influenzer userId
   username        String
   profileSnapshot Json           @map("profile_snapshot") // full profile from Filter API
@@ -1245,37 +1344,37 @@ enum SuggestionSource {
 }
 
 model InfluencerSuggestion {
-  id                String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
 
   // Who submitted it (outside the system)
-  source            SuggestionSource @default(telegram)
-  telegramUserId    String?          @map("telegram_user_id")
-  telegramUsername  String?          @map("telegram_username")
-  submittedByName   String?          @map("submitted_by_name")
+  source           SuggestionSource @default(telegram)
+  telegramUserId   String?          @map("telegram_user_id")
+  telegramUsername String?          @map("telegram_username")
+  submittedByName  String?          @map("submitted_by_name")
 
   // What was submitted
-  platform          String           // "instagram" | "youtube" | "tiktok"
-  profileUrl        String           @map("profile_url")
-  handle            String?          // extracted @handle if parseable
-  note              String?
+  platform   String // "instagram" | "youtube" | "tiktok"
+  profileUrl String  @map("profile_url")
+  handle     String? // extracted @handle if parseable
+  note       String?
 
   // Assignment
-  assignedToUserId  String           @map("assigned_to_user_id") @db.Uuid
-  assignedTo        User             @relation("UserAssignedSuggestions", fields: [assignedToUserId], references: [id])
+  assignedToUserId String @map("assigned_to_user_id") @db.Uuid
+  assignedTo       User   @relation("UserAssignedSuggestions", fields: [assignedToUserId], references: [id])
 
   // Review
-  status            SuggestionStatus @default(pending)
-  reviewerNote      String?          @map("reviewer_note")
-  reviewedAt        DateTime?        @map("reviewed_at") @db.Timestamptz()
-  reviewedByUserId  String?          @map("reviewed_by_user_id") @db.Uuid
-  reviewedBy        User?            @relation("UserReviewedSuggestions", fields: [reviewedByUserId], references: [id])
+  status           SuggestionStatus @default(pending)
+  reviewerNote     String?          @map("reviewer_note")
+  reviewedAt       DateTime?        @map("reviewed_at") @db.Timestamptz()
+  reviewedByUserId String?          @map("reviewed_by_user_id") @db.Uuid
+  reviewedBy       User?            @relation("UserReviewedSuggestions", fields: [reviewedByUserId], references: [id])
 
   // If approved, link to the created Influencer
-  promotedInfluencerId String?       @map("promoted_influencer_id") @db.Uuid
-  promotedInfluencer   Influencer?   @relation("SuggestionPromotedInfluencer", fields: [promotedInfluencerId], references: [id])
+  promotedInfluencerId String?     @map("promoted_influencer_id") @db.Uuid
+  promotedInfluencer   Influencer? @relation("SuggestionPromotedInfluencer", fields: [promotedInfluencerId], references: [id])
 
-  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt         DateTime         @updatedAt @map("updated_at") @db.Timestamptz()
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 
   @@index([assignedToUserId, status])
   @@index([status, createdAt])
@@ -1295,22 +1394,22 @@ enum TelegramSessionState {
 }
 
 model TelegramSession {
-  chatId           String               @id @map("chat_id")
-  state            TelegramSessionState @default(idle)
+  chatId String               @id @map("chat_id")
+  state  TelegramSessionState @default(idle)
 
   // Partial data captured during the flow, flushed on completion
-  draftPlatform    String?              @map("draft_platform")
-  draftProfileUrl  String?              @map("draft_profile_url")
-  draftHandle      String?              @map("draft_handle")
-  draftAssigneeId  String?              @map("draft_assignee_id") @db.Uuid
+  draftPlatform   String? @map("draft_platform")
+  draftProfileUrl String? @map("draft_profile_url")
+  draftHandle     String? @map("draft_handle")
+  draftAssigneeId String? @map("draft_assignee_id") @db.Uuid
 
   // Identity captured on first /start
-  telegramUserId   String?              @map("telegram_user_id")
-  telegramUsername String?              @map("telegram_username")
-  firstName        String?              @map("first_name")
+  telegramUserId   String? @map("telegram_user_id")
+  telegramUsername String? @map("telegram_username")
+  firstName        String? @map("first_name")
 
-  createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt        DateTime             @updatedAt @map("updated_at") @db.Timestamptz()
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 
   @@map("telegram_sessions")
 }
@@ -1340,45 +1439,45 @@ enum DocumentAccessAction {
 }
 
 model DocumentRecord {
-  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
 
   // Polymorphic owner: "agency" | "influencer" | "contract" | "invoice" | etc.
-  entityType    String   @map("entity_type")
-  entityId      String   @map("entity_id") @db.Uuid
+  entityType String @map("entity_type")
+  entityId   String @map("entity_id") @db.Uuid
 
   // Document classification: "aadhar" | "pan" | "gst" | "udhyam" | "roster" | "bank_proof" | "other"
-  documentType  String   @map("document_type")
+  documentType String @map("document_type")
 
   // Storage
-  bucket        String
-  storageKey    String   @unique @map("storage_key")
+  bucket     String
+  storageKey String @unique @map("storage_key")
 
   // Metadata captured at upload
-  originalFilename String  @map("original_filename")
-  mimeType         String  @map("mime_type")
-  sizeBytes        Int     @map("size_bytes") @default(0)
+  originalFilename String @map("original_filename")
+  mimeType         String @map("mime_type")
+  sizeBytes        Int    @default(0) @map("size_bytes")
 
   // Audit
-  uploadedBy   String   @map("uploaded_by") @db.Uuid
-  uploadedAt   DateTime @default(now()) @map("uploaded_at") @db.Timestamptz()
+  uploadedBy String   @map("uploaded_by") @db.Uuid
+  uploadedAt DateTime @default(now()) @map("uploaded_at") @db.Timestamptz()
 
   // Lifecycle
-  status        DocumentStatus @default(active)
-  supersededBy  String?  @map("superseded_by") @db.Uuid
-  supersededAt  DateTime? @map("superseded_at") @db.Timestamptz()
-  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz()
-  revokedAt     DateTime? @map("revoked_at") @db.Timestamptz()
-  revokedBy     String?   @map("revoked_by") @db.Uuid
-  revokeReason  String?   @map("revoke_reason")
+  status       DocumentStatus @default(active)
+  supersededBy String?        @map("superseded_by") @db.Uuid
+  supersededAt DateTime?      @map("superseded_at") @db.Timestamptz()
+  deletedAt    DateTime?      @map("deleted_at") @db.Timestamptz()
+  revokedAt    DateTime?      @map("revoked_at") @db.Timestamptz()
+  revokedBy    String?        @map("revoked_by") @db.Uuid
+  revokeReason String?        @map("revoke_reason")
 
   // KYC verification workflow
   verificationStatus DocumentVerificationStatus @default(pending) @map("verification_status")
-  verifiedBy         String?   @map("verified_by") @db.Uuid
-  verifiedAt         DateTime? @map("verified_at") @db.Timestamptz()
-  rejectionReason    String?   @map("rejection_reason")
+  verifiedBy         String?                    @map("verified_by") @db.Uuid
+  verifiedAt         DateTime?                  @map("verified_at") @db.Timestamptz()
+  rejectionReason    String?                    @map("rejection_reason")
 
   // Audit log relation
-  accessLogs    DocumentAccessLog[]
+  accessLogs DocumentAccessLog[]
 
   @@index([entityType, entityId, documentType, status])
   @@index([uploadedBy])
@@ -1391,24 +1490,24 @@ model DocumentRecord {
 // ============================================================
 
 model RateLimitBucket {
-  key        String   @id // "ip:1.2.3.4:onboarding" or "user:abc:presign"
-  count      Int      @default(0)
-  resetAt    DateTime @map("reset_at") @db.Timestamptz()
+  key     String   @id // "ip:1.2.3.4:onboarding" or "user:abc:presign"
+  count   Int      @default(0)
+  resetAt DateTime @map("reset_at") @db.Timestamptz()
 
   @@index([resetAt])
   @@map("rate_limit_buckets")
 }
 
 model DocumentAccessLog {
-  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  documentId   String   @map("document_id") @db.Uuid
-  userId       String?  @map("user_id") @db.Uuid
-  action       DocumentAccessAction
-  ipAddress    String?  @map("ip_address")
-  userAgent    String?  @map("user_agent")
-  accessedAt   DateTime @default(now()) @map("accessed_at") @db.Timestamptz()
+  id         String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  documentId String               @map("document_id") @db.Uuid
+  userId     String?              @map("user_id") @db.Uuid
+  action     DocumentAccessAction
+  ipAddress  String?              @map("ip_address")
+  userAgent  String?              @map("user_agent")
+  accessedAt DateTime             @default(now()) @map("accessed_at") @db.Timestamptz()
 
-  document     DocumentRecord @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  document DocumentRecord @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
   @@index([documentId, accessedAt])
   @@index([userId, accessedAt])

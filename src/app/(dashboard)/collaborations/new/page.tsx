@@ -162,6 +162,7 @@ export default function NewCollaborationPage() {
     type: "paid",
     status: "draft",
     agreedAmount: "",
+    gstPct: "18",
     currency: "INR",
     paymentTermId: "",
     brief: "",
@@ -592,10 +593,22 @@ export default function NewCollaborationPage() {
         }))
       );
 
+      // Compute payable on the client too — server is authoritative but
+      // sending it lets the API skip the multiplication.
+      const agreedNum = parseFloat(form.agreedAmount) || 0;
+      const gstNum =
+        form.type === "barter" ? 0 : parseFloat(form.gstPct) || 0;
+      const payableNum =
+        agreedNum > 0
+          ? Math.round(agreedNum * (1 + gstNum / 100) * 100) / 100
+          : 0;
+
       const payload: Record<string, unknown> = {
         ...form,
         requiresContentApproval,
         deliverables: deliverablesJson,
+        gstPct: form.type === "barter" ? null : gstNum,
+        payableAmount: payableNum > 0 ? payableNum : null,
         products: products.map((p) => ({
           productId: p.productId,
           quantity: p.quantity,
@@ -605,6 +618,8 @@ export default function NewCollaborationPage() {
       // Remove empty optional fields
       if (!payload.campaignId) delete payload.campaignId;
       if (!payload.agreedAmount) delete payload.agreedAmount;
+      if (payload.gstPct == null) delete payload.gstPct;
+      if (payload.payableAmount == null) delete payload.payableAmount;
       if (!payload.paymentTermId || form.type !== "paid") delete payload.paymentTermId;
       if (!payload.brief) delete payload.brief;
       if (!payload.agencyId) delete payload.agencyId;
@@ -1205,6 +1220,24 @@ export default function NewCollaborationPage() {
             </div>
 
             <div className="space-y-2">
+              <Label htmlFor="gstPct">GST %</Label>
+              <select
+                id="gstPct"
+                name="gstPct"
+                value={form.type === "barter" ? "0" : form.gstPct}
+                onChange={handleChange}
+                disabled={form.type === "barter"}
+                className={selectClass}
+              >
+                <option value="0">No GST (0%)</option>
+                <option value="5">5%</option>
+                <option value="12">12%</option>
+                <option value="18">18% (standard)</option>
+                <option value="28">28%</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="currency">Currency</Label>
               <select
                 id="currency"
@@ -1217,6 +1250,50 @@ export default function NewCollaborationPage() {
                 <option value="USD">USD</option>
               </select>
             </div>
+
+            {form.type === "paid" && form.agreedAmount && (
+              <div className="md:col-span-2 rounded-lg border bg-muted/30 p-3 text-sm">
+                {(() => {
+                  const amt = parseFloat(form.agreedAmount) || 0;
+                  const gst = parseFloat(form.gstPct) || 0;
+                  const gstAmt = Math.round(amt * gst) / 100;
+                  const payable = Math.round((amt + gstAmt) * 100) / 100;
+                  const fmt = (n: number) =>
+                    `${form.currency === "INR" ? "₹" : "$"}${n.toLocaleString(
+                      form.currency === "INR" ? "en-IN" : "en-US",
+                      { minimumFractionDigits: 2, maximumFractionDigits: 2 },
+                    )}`;
+                  return (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Agreed amount</span>
+                        <span className="font-medium tabular-nums">{fmt(amt)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">
+                          GST ({gst}%)
+                        </span>
+                        <span className="font-medium tabular-nums">
+                          {fmt(gstAmt)}
+                        </span>
+                      </div>
+                      <div className="mt-1 flex justify-between border-t pt-1">
+                        <span className="font-semibold">
+                          Payable to influencer
+                        </span>
+                        <span className="font-semibold tabular-nums">
+                          {fmt(payable)}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        This is the gross-of-GST amount used on the PO. TDS, if
+                        any, is deducted at the payment stage.
+                      </p>
+                    </>
+                  );
+                })()}
+              </div>
+            )}
 
             {/* Payment Terms - only for paid collaborations */}
             {form.type === "paid" && (
@@ -1232,25 +1309,73 @@ export default function NewCollaborationPage() {
                 />
                 {form.paymentTermId && form.agreedAmount && (
                   <div className="mt-2 rounded-lg bg-muted/50 p-3">
-                    <p className="text-xs font-medium text-muted-foreground mb-1">Payment Schedule Preview:</p>
+                    <p className="text-xs font-medium text-muted-foreground mb-1">
+                      Payment Schedule Preview:
+                    </p>
                     <div className="space-y-1">
                       {(() => {
-                        const term = paymentTermOptions.find((o) => o.value === form.paymentTermId);
-                        const amount = parseFloat(form.agreedAmount) || 0;
-                        if (!term?.sublabel || !amount) return null;
-                        return term.sublabel.split(" + ").map((part, i) => {
-                          const match = part.match(/(\d+)%\s+(.*)/);
+                        const term = paymentTermOptions.find(
+                          (o) => o.value === form.paymentTermId,
+                        );
+                        const agreed = parseFloat(form.agreedAmount) || 0;
+                        const gst = parseFloat(form.gstPct) || 0;
+                        // Schedule applies to the invoice (gross-of-GST) —
+                        // that's what the brand actually pays each tranche.
+                        const basis =
+                          Math.round(agreed * (1 + gst / 100) * 100) / 100;
+                        if (!term?.sublabel || !basis) return null;
+                        const parts = term.sublabel.split(" + ");
+                        let totalPct = 0;
+                        const rows = parts.map((part, i) => {
+                          // Allow decimal percentages like 33.33%
+                          const match = part.match(/(\d+(?:\.\d+)?)%\s+(.*)/);
                           if (!match) return null;
-                          const pct = parseInt(match[1]);
+                          const pct = parseFloat(match[1]);
                           const label = match[2];
-                          const instAmount = Math.round(amount * pct / 100 * 100) / 100;
+                          if (!isFinite(pct)) return null;
+                          totalPct += pct;
+                          const instAmount =
+                            Math.round((basis * pct) / 100 * 100) / 100;
                           return (
-                            <div key={i} className="flex justify-between text-xs">
-                              <span>{label}</span>
-                              <span className="font-medium">₹{instAmount.toLocaleString("en-IN")}</span>
+                            <div
+                              key={i}
+                              className="flex justify-between text-xs"
+                            >
+                              <span>
+                                {label}{" "}
+                                <span className="text-muted-foreground">
+                                  ({pct}%)
+                                </span>
+                              </span>
+                              <span className="font-medium tabular-nums">
+                                ₹
+                                {instAmount.toLocaleString("en-IN", {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                })}
+                              </span>
                             </div>
                           );
                         });
+                        return (
+                          <>
+                            {rows}
+                            {gst > 0 && (
+                              <p className="mt-1 text-[10px] text-muted-foreground">
+                                Schedule is applied to payable amount (₹
+                                {basis.toLocaleString("en-IN")}, includes {gst}%
+                                GST).
+                              </p>
+                            )}
+                            {Math.abs(totalPct - 100) > 0.01 && (
+                              <p className="mt-1 text-[10px] text-amber-700">
+                                Note: instalment percentages sum to{" "}
+                                {totalPct.toFixed(2)}%, not 100%. Check the
+                                payment term setup.
+                              </p>
+                            )}
+                          </>
+                        );
                       })()}
                     </div>
                   </div>

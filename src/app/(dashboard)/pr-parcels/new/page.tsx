@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Plus, Trash2, AlertTriangle, CheckCircle2, Package, ExternalLink } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, AlertTriangle, CheckCircle2, Package, ExternalLink, MapPin, Phone, Mail, MessageSquare, CreditCard, Tag } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,12 +26,24 @@ interface InfluencerDetail {
   tier?: string;
   city?: string;
   igFollowerCount?: number;
+  igEngagementRate?: number | string | null;
   addressLine1?: string;
   addressLine2?: string;
   state?: string;
   pincode?: string;
   country?: string;
   phone?: string;
+  whatsappNumber?: string;
+  email?: string;
+  upiId?: string;
+  bankAccountName?: string;
+  bankAccountNumber?: string;
+  bankIfscCode?: string;
+  paymentPreference?: string;
+  panNumber?: string;
+  gstin?: string;
+  categories?: string[];
+  contentNiches?: string[];
 }
 
 interface ProductDetail {
@@ -346,10 +358,13 @@ export default function NewPrParcelPage() {
             )}
 
             {selectedInfluencer && (
-              <div className="rounded-lg border bg-gray-50 p-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="font-semibold text-gray-900">{selectedInfluencer.name}</p>
+              <div className="rounded-lg border bg-gray-50 p-4 space-y-3">
+                {/* Header — name + handle + tier */}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-gray-900">
+                      {selectedInfluencer.name}
+                    </p>
                     {selectedInfluencer.instagramHandle && (
                       <a
                         href={`https://instagram.com/${selectedInfluencer.instagramHandle}`}
@@ -361,8 +376,13 @@ export default function NewPrParcelPage() {
                         <ExternalLink className="h-3 w-3" />
                       </a>
                     )}
+                    {selectedInfluencer.igFollowerCount != null && (
+                      <span className="ml-2 text-xs text-gray-500">
+                        {formatCount(selectedInfluencer.igFollowerCount)} followers
+                      </span>
+                    )}
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0">
                     {selectedInfluencer.tier && (
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-medium ${tierColors[selectedInfluencer.tier] || "bg-gray-100 text-gray-700"}`}
@@ -370,55 +390,204 @@ export default function NewPrParcelPage() {
                         {selectedInfluencer.tier}
                       </span>
                     )}
-                    {selectedInfluencer.city && (
-                      <span className="text-xs text-gray-500">{selectedInfluencer.city}</span>
-                    )}
+                    <Link
+                      href={`/influencers/${selectedInfluencer.id}/edit`}
+                      className="text-xs text-gray-600 underline hover:text-gray-900"
+                    >
+                      Edit
+                    </Link>
                   </div>
                 </div>
 
-                {/* Address check */}
-                {!hasAddress && (
-                  <div className="flex items-center gap-2 rounded-md bg-yellow-50 border border-yellow-200 px-3 py-2">
-                    <AlertTriangle className="h-4 w-4 text-yellow-600 flex-shrink-0" />
-                    <p className="text-sm text-yellow-800">
-                      No address on file.{" "}
-                      <Link
-                        href={`/influencers/${selectedInfluencer.id}`}
-                        className="font-medium underline"
-                      >
-                        Edit influencer
-                      </Link>
-                    </p>
+                {/* Two-column data grid */}
+                <div className="grid gap-3 md:grid-cols-2">
+                  {/* Shipping Address */}
+                  <div className="rounded-md border bg-white p-3">
+                    <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      <MapPin className="h-3.5 w-3.5" />
+                      Shipping Address
+                    </div>
+                    {hasAddress ? (
+                      <div className="text-sm text-gray-800 whitespace-pre-line">
+                        {[
+                          selectedInfluencer.addressLine1,
+                          selectedInfluencer.addressLine2,
+                          [
+                            selectedInfluencer.city,
+                            selectedInfluencer.state,
+                            selectedInfluencer.pincode,
+                          ]
+                            .filter(Boolean)
+                            .join(", "),
+                          selectedInfluencer.country,
+                        ]
+                          .filter(Boolean)
+                          .join("\n")}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-yellow-700">
+                        No address on file —{" "}
+                        <Link
+                          href={`/influencers/${selectedInfluencer.id}/edit`}
+                          className="font-medium underline"
+                        >
+                          add one
+                        </Link>
+                      </p>
+                    )}
                   </div>
-                )}
-                {hasAddress && (
-                  <div className="flex items-center gap-2 text-sm text-green-700">
-                    <CheckCircle2 className="h-4 w-4" />
-                    Address available
-                  </div>
-                )}
 
-                {/* Phone check */}
-                {!hasPhone && (
-                  <div className="flex items-center gap-2 rounded-md bg-yellow-50 border border-yellow-200 px-3 py-2">
-                    <AlertTriangle className="h-4 w-4 text-yellow-600 flex-shrink-0" />
-                    <p className="text-sm text-yellow-800">
-                      No phone number on file.{" "}
-                      <Link
-                        href={`/influencers/${selectedInfluencer.id}`}
-                        className="font-medium underline"
-                      >
-                        Edit influencer
-                      </Link>
-                    </p>
+                  {/* Contact */}
+                  <div className="rounded-md border bg-white p-3">
+                    <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      Contact
+                    </div>
+                    <div className="space-y-1 text-sm">
+                      {selectedInfluencer.phone ? (
+                        <div className="flex items-center gap-2">
+                          <Phone className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+                          <a
+                            href={`tel:${selectedInfluencer.phone}`}
+                            className="hover:underline"
+                          >
+                            {selectedInfluencer.phone}
+                          </a>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 text-yellow-700">
+                          <Phone className="h-3.5 w-3.5 shrink-0" />
+                          No phone on file
+                        </div>
+                      )}
+                      {selectedInfluencer.whatsappNumber && (
+                        <div className="flex items-center gap-2">
+                          <MessageSquare className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+                          <a
+                            href={`https://wa.me/${selectedInfluencer.whatsappNumber.replace(/\D/g, "")}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="hover:underline"
+                          >
+                            {selectedInfluencer.whatsappNumber}
+                          </a>
+                        </div>
+                      )}
+                      {selectedInfluencer.email && (
+                        <div className="flex items-center gap-2">
+                          <Mail className="h-3.5 w-3.5 text-gray-400 shrink-0" />
+                          <a
+                            href={`mailto:${selectedInfluencer.email}`}
+                            className="hover:underline truncate"
+                          >
+                            {selectedInfluencer.email}
+                          </a>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                )}
-                {hasPhone && (
-                  <div className="flex items-center gap-2 text-sm text-green-700">
-                    <CheckCircle2 className="h-4 w-4" />
-                    Phone number available
-                  </div>
-                )}
+
+                  {/* Payment — shown for context (not used for PR parcels, but
+                      relevant when this influencer also has a paid collab) */}
+                  {(selectedInfluencer.upiId ||
+                    selectedInfluencer.bankAccountNumber ||
+                    selectedInfluencer.paymentPreference) && (
+                    <div className="rounded-md border bg-white p-3">
+                      <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        <CreditCard className="h-3.5 w-3.5" />
+                        Payment on file
+                      </div>
+                      <div className="space-y-1 text-sm">
+                        {selectedInfluencer.paymentPreference && (
+                          <div className="text-xs text-gray-500">
+                            Prefers:{" "}
+                            <span className="font-medium text-gray-800 capitalize">
+                              {selectedInfluencer.paymentPreference.replace(
+                                /_/g,
+                                " ",
+                              )}
+                            </span>
+                          </div>
+                        )}
+                        {selectedInfluencer.upiId && (
+                          <div>
+                            UPI:{" "}
+                            <span className="font-mono">
+                              {selectedInfluencer.upiId}
+                            </span>
+                          </div>
+                        )}
+                        {selectedInfluencer.bankAccountNumber && (
+                          <div className="text-xs">
+                            Bank: ••••
+                            {selectedInfluencer.bankAccountNumber.slice(-4)}
+                            {selectedInfluencer.bankIfscCode &&
+                              ` · ${selectedInfluencer.bankIfscCode}`}
+                          </div>
+                        )}
+                        {selectedInfluencer.gstin && (
+                          <div className="text-xs">
+                            GSTIN:{" "}
+                            <span className="font-mono">
+                              {selectedInfluencer.gstin}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Categories / niches */}
+                  {((selectedInfluencer.categories?.length ?? 0) > 0 ||
+                    (selectedInfluencer.contentNiches?.length ?? 0) > 0) && (
+                    <div className="rounded-md border bg-white p-3">
+                      <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        <Tag className="h-3.5 w-3.5" />
+                        Niches
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {[
+                          ...(selectedInfluencer.categories ?? []),
+                          ...(selectedInfluencer.contentNiches ?? []),
+                        ]
+                          .slice(0, 8)
+                          .map((c) => (
+                            <span
+                              key={c}
+                              className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-700"
+                            >
+                              {c}
+                            </span>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Status summary */}
+                <div className="flex flex-wrap gap-3 text-xs">
+                  {hasAddress ? (
+                    <span className="inline-flex items-center gap-1 text-green-700">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Address ready
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-yellow-700">
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                      Address required
+                    </span>
+                  )}
+                  {hasPhone ? (
+                    <span className="inline-flex items-center gap-1 text-green-700">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Phone ready
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-yellow-700">
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                      Phone required
+                    </span>
+                  )}
+                </div>
               </div>
             )}
           </CardContent>
@@ -594,6 +763,22 @@ export default function NewPrParcelPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* What happens on submit */}
+        {parcelProducts.length > 0 &&
+          parcelProducts.some((p) => p.shopifyVariantId) && (
+            <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+              <div className="font-medium">On submit:</div>
+              <ul className="ml-4 mt-1 list-disc space-y-0.5 text-xs">
+                <li>PR parcel record will be created</li>
+                <li>
+                  Shopify ₹1 order will be auto-created for the synced products
+                  (uses the address shown above)
+                </li>
+                <li>Tracking info can be added later</li>
+              </ul>
+            </div>
+          )}
 
         {/* Submit */}
         <div className="flex gap-4">

@@ -18,6 +18,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EditableField } from "./editable-fields";
 import { InlineStatusSelect } from "../inline-status-select";
+import { SpocCard } from "@/components/spoc-card";
+import { auth } from "@/lib/auth";
 import {
   ArrowLeft,
   Trash2,
@@ -128,10 +130,20 @@ export default async function CollaborationDetailPage(props: {
 }) {
   const { id } = await props.params;
 
+  const session = await auth();
+  const isAdmin =
+    (session?.user as { role?: string } | undefined)?.role === "admin";
+
   const collaboration = await prisma.collaboration.findUnique({
     where: { id },
     include: {
-      influencer: true,
+      influencer: {
+        include: {
+          owner: { select: { id: true, name: true, email: true } },
+          creator: { select: { id: true, name: true, email: true } },
+          agency: true,
+        },
+      },
       brand: true,
       campaign: true,
       assignee: {
@@ -264,6 +276,46 @@ export default async function CollaborationDetailPage(props: {
         {/* Overview Tab */}
         <TabsContent value="overview">
           <div className="grid gap-6 md:grid-cols-2">
+            {/* SPOC — points of contact for this collab */}
+            <div className="md:col-span-2">
+              <SpocCard
+                hideInternal={!isAdmin}
+                internal={{
+                  owner: collaboration.influencer.owner,
+                  creator: collaboration.influencer.creator,
+                  ownedAt: collaboration.influencer.ownedAt,
+                }}
+                influencer={{
+                  name: collaboration.influencer.name,
+                  email: collaboration.influencer.email,
+                  phone: collaboration.influencer.phone,
+                  whatsappNumber: collaboration.influencer.whatsappNumber,
+                }}
+                agency={
+                  collaboration.influencer.agency
+                    ? {
+                        id: collaboration.influencer.agency.id,
+                        name: collaboration.influencer.agency.name,
+                        contactPerson:
+                          collaboration.influencer.agency.contactPerson,
+                        email: collaboration.influencer.agency.email,
+                        phone: collaboration.influencer.agency.phone,
+                        commissionPct:
+                          collaboration.agencyCommissionPct
+                            ? Number(collaboration.agencyCommissionPct)
+                            : collaboration.influencer.agency.commissionPct
+                              ? Number(
+                                  collaboration.influencer.agency
+                                    .commissionPct,
+                                )
+                              : null,
+                        managedBy: collaboration.influencer.managedBy,
+                      }
+                    : null
+                }
+              />
+            </div>
+
             {/* Collaboration Details */}
             <Card>
               <CardHeader>
@@ -300,6 +352,32 @@ export default async function CollaborationDetailPage(props: {
                     displayFormat="currency"
                   />
                 </div>
+                {collaboration.gstPct != null && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-500">GST</span>
+                    <span className="text-sm">
+                      {Number(collaboration.gstPct).toFixed(2)}%
+                    </span>
+                  </div>
+                )}
+                {collaboration.payableAmount != null && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">
+                      Payable to influencer
+                    </span>
+                    <span className="text-sm font-semibold tabular-nums">
+                      {(collaboration.currency ?? "INR") === "INR" ? "₹" : "$"}
+                      {Number(
+                        collaboration.payableAmount,
+                      ).toLocaleString(
+                        (collaboration.currency ?? "INR") === "INR"
+                          ? "en-IN"
+                          : "en-US",
+                        { minimumFractionDigits: 2, maximumFractionDigits: 2 },
+                      )}
+                    </span>
+                  </div>
+                )}
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-500">Currency</span>
                   <span className="text-sm">{collaboration.currency || "INR"}</span>

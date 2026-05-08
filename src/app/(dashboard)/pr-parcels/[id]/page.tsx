@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db";
 import { ParcelStatus } from "@/generated/prisma";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Package, MapPin, Truck } from "lucide-react";
+import { ArrowLeft, Package, MapPin, Truck, FileText, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -73,6 +73,7 @@ export default async function PrParcelDetailPage({
       items: {
         include: { product: true },
       },
+      purchaseOrder: true,
     },
   });
 
@@ -133,7 +134,22 @@ export default async function PrParcelDetailPage({
           </CardHeader>
           <CardContent>
             <p className="text-sm whitespace-pre-wrap">
-              {parcel.shippingAddress || "No address provided"}
+              {(() => {
+                // Prefer the per-parcel override if someone set one. Most
+                // parcels don't have it because the create form doesn't ask
+                // for it — fall back to the influencer's stored address.
+                if (parcel.shippingAddress) return parcel.shippingAddress;
+                const inf = parcel.influencer;
+                const lines = [
+                  inf.name,
+                  inf.addressLine1,
+                  inf.addressLine2,
+                  [inf.city, inf.state, inf.pincode].filter(Boolean).join(", "),
+                  inf.country,
+                  inf.phone ? `Phone: ${inf.phone}` : null,
+                ].filter(Boolean);
+                return lines.length > 0 ? lines.join("\n") : "No address provided";
+              })()}
             </p>
           </CardContent>
         </Card>
@@ -275,6 +291,116 @@ export default async function PrParcelDetailPage({
           )}
         </CardContent>
       </Card>
+
+      {/* Purchase Order — only renders when one was generated for this parcel
+          (paid collab + agreedAmount > 0). Barter-only or gifting-only parcels
+          don't have a PO and this card stays hidden. */}
+      {parcel.purchaseOrder && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div className="flex items-center gap-2">
+              <FileText className="h-4 w-4 text-gray-500" />
+              <CardTitle>Purchase Order</CardTitle>
+            </div>
+            <div className="flex items-center gap-2">
+              <a
+                href={`/api/purchase-orders/${parcel.purchaseOrder.id}/html`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <Button variant="outline" size="sm">
+                  Preview
+                </Button>
+              </a>
+              <a
+                href={`/api/purchase-orders/${parcel.purchaseOrder.id}/pdf`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <Button size="sm">
+                  <Download className="mr-1 h-4 w-4" />
+                  Download PDF
+                </Button>
+              </a>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <p className="text-xs text-gray-500">PO Number</p>
+                <p className="text-sm font-mono font-medium">
+                  {parcel.purchaseOrder.poNumber}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">PO Date</p>
+                <p className="text-sm">
+                  {new Date(parcel.purchaseOrder.poDate).toLocaleDateString(
+                    "en-IN",
+                  )}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Vendor Code</p>
+                <p className="text-sm font-mono">
+                  {parcel.purchaseOrder.vendorCodeSnapshot}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Vendor</p>
+                <p className="text-sm">
+                  {parcel.purchaseOrder.vendorNameSnapshot}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Base Price</p>
+                <p className="text-sm tabular-nums">
+                  ₹
+                  {Number(parcel.purchaseOrder.basePrice).toLocaleString(
+                    "en-IN",
+                    { minimumFractionDigits: 2, maximumFractionDigits: 2 },
+                  )}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Tax</p>
+                <p className="text-sm tabular-nums">
+                  {Number(parcel.purchaseOrder.igstAmount) > 0 ? (
+                    <>
+                      IGST @ {Number(parcel.purchaseOrder.taxRate)}% — ₹
+                      {Number(parcel.purchaseOrder.igstAmount).toLocaleString(
+                        "en-IN",
+                        { minimumFractionDigits: 2, maximumFractionDigits: 2 },
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      CGST + SGST — ₹
+                      {(
+                        Number(parcel.purchaseOrder.cgstAmount) +
+                        Number(parcel.purchaseOrder.sgstAmount)
+                      ).toLocaleString("en-IN", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </>
+                  )}
+                </p>
+              </div>
+              <div className="sm:col-span-2 border-t pt-2">
+                <p className="text-xs text-gray-500">Grand Total</p>
+                <p className="text-lg font-bold tabular-nums">
+                  ₹
+                  {Number(parcel.purchaseOrder.grandTotal).toLocaleString(
+                    "en-IN",
+                    { minimumFractionDigits: 2, maximumFractionDigits: 2 },
+                  )}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
