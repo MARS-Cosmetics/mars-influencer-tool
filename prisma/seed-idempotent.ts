@@ -14,7 +14,7 @@
  *   5. Optionally seeds influencers + collaborations (dev/uat only)
  */
 
-import { PrismaClient } from "../src/generated/prisma";
+import { PrismaClient, Prisma } from "../src/generated/prisma";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 import { hash } from "bcryptjs";
@@ -183,7 +183,10 @@ async function seedTestInfluencers(adminId: string, userId: string) {
   }
 
   console.log("  → Seeding test influencers (dev/uat only)...");
-  const influencers = [
+  // Typed as the unchecked variant so plain `source: "manual_discovery"`
+  // string literals are accepted as the InfluencerSource enum, and `createdBy`
+  // can be set as a plain UUID string instead of `creator: { connect: ... }`.
+  const influencers: Prisma.InfluencerUncheckedCreateInput[] = [
     {
       name: "Ananya Mishra",
       email: "ananya@gmail.com",
