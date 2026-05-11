@@ -16,10 +16,16 @@ import {
   Building2,
   BarChart3,
   Link as LinkIcon,
+  Music,
+  Hash,
+  Clock,
+  FileText,
+  Pencil,
 } from "lucide-react";
 import { ContentRating } from "@/components/content-rating";
 import { ContentReview } from "@/components/content-review";
 import { RefreshMetricsButton } from "./refresh-metrics-button";
+import { RefreshBrightDataButton } from "./refresh-brightdata-button";
 
 function formatNumber(value: number | null | undefined): string {
   if (value === null || value === undefined) return "-";
@@ -160,10 +166,35 @@ export default async function AssetDetailPage(props: {
             </div>
           </div>
         </div>
-        <RefreshMetricsButton
-          assetId={asset.id}
-          lastSyncedAt={asset.influencer.metricsLastSyncedAt?.toISOString() ?? null}
-        />
+        <div className="flex items-start gap-2">
+          <Link href={`/assets/${asset.id}/edit`}>
+            <Button size="sm" variant="outline">
+              <Pencil className="mr-2 h-4 w-4" />
+              Edit
+            </Button>
+          </Link>
+          {(() => {
+            const platformOk = asset.platform === "instagram";
+            const urlOk = Boolean(asset.contentUrl);
+            const isDisabled = !platformOk || !urlOk;
+            const reason = !platformOk
+              ? `Platform is "${asset.platform}", not "instagram" — Bright Data integration only supports IG`
+              : !urlOk
+                ? "This asset has no Content URL set. Edit the asset and paste the Instagram post/reel URL."
+                : undefined;
+            return (
+              <RefreshBrightDataButton
+                assetId={asset.id}
+                disabled={isDisabled}
+                disabledReason={reason}
+              />
+            );
+          })()}
+          <RefreshMetricsButton
+            assetId={asset.id}
+            lastSyncedAt={asset.influencer.metricsLastSyncedAt?.toISOString() ?? null}
+          />
+        </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
@@ -296,6 +327,134 @@ export default async function AssetDetailPage(props: {
             </div>
           </CardContent>
         </Card>
+
+        {/* Post Metadata Card (Bright Data) */}
+        {asset.brightDataSnapshot &&
+          typeof asset.brightDataSnapshot === "object" &&
+          !Array.isArray(asset.brightDataSnapshot) &&
+          (() => {
+            const bd = asset.brightDataSnapshot as {
+              caption?: string | null;
+              hashtags?: string[];
+              audio?: {
+                title?: string | null;
+                artist?: string | null;
+                isOriginalAudio?: boolean | null;
+              } | null;
+              videoDurationSec?: number | null;
+              isPaidPartnership?: boolean | null;
+              datePosted?: string | null;
+              contentTypeLabel?: string | null;
+              thumbnail?: string | null;
+            };
+            const durStr =
+              typeof bd.videoDurationSec === "number"
+                ? `${Math.floor(bd.videoDurationSec / 60)}:${String(
+                    Math.round(bd.videoDurationSec % 60),
+                  ).padStart(2, "0")}`
+                : null;
+            const anyContent =
+              bd.caption ||
+              (bd.hashtags && bd.hashtags.length > 0) ||
+              bd.audio ||
+              durStr ||
+              bd.isPaidPartnership !== undefined ||
+              bd.datePosted ||
+              bd.contentTypeLabel;
+            if (!anyContent) return null;
+            return (
+              <Card className="md:col-span-2">
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between text-base">
+                    <span className="flex items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      Post Metadata
+                    </span>
+                    {asset.brightDataSyncedAt && (
+                      <span className="text-[11px] font-normal text-gray-500">
+                        Synced {formatDateTime(asset.brightDataSyncedAt)}
+                      </span>
+                    )}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {bd.contentTypeLabel && (
+                      <Badge className="bg-indigo-100 text-indigo-800">
+                        {bd.contentTypeLabel}
+                      </Badge>
+                    )}
+                    {bd.isPaidPartnership && (
+                      <Badge className="bg-amber-100 text-amber-800">
+                        Paid Partnership
+                      </Badge>
+                    )}
+                    {bd.datePosted && (
+                      <span className="text-xs text-gray-500">
+                        Posted {formatDate(bd.datePosted)}
+                      </span>
+                    )}
+                    {durStr && (
+                      <span className="inline-flex items-center gap-1 text-xs text-gray-500">
+                        <Clock className="h-3 w-3" />
+                        {durStr}
+                      </span>
+                    )}
+                  </div>
+
+                  {bd.caption && (
+                    <div>
+                      <p className="text-xs font-medium text-gray-500 mb-1">
+                        Caption
+                      </p>
+                      <p className="whitespace-pre-wrap text-sm text-gray-800">
+                        {bd.caption}
+                      </p>
+                    </div>
+                  )}
+
+                  {bd.hashtags && bd.hashtags.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium text-gray-500 mb-1 flex items-center gap-1">
+                        <Hash className="h-3 w-3" />
+                        Hashtags ({bd.hashtags.length})
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        {bd.hashtags.map((tag) => (
+                          <span
+                            key={tag}
+                            className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {bd.audio && (bd.audio.title || bd.audio.artist) && (
+                    <div>
+                      <p className="text-xs font-medium text-gray-500 mb-1 flex items-center gap-1">
+                        <Music className="h-3 w-3" />
+                        Audio
+                      </p>
+                      <p className="text-sm text-gray-800">
+                        {bd.audio.title || "—"}
+                        {bd.audio.artist && (
+                          <span className="text-gray-500"> — {bd.audio.artist}</span>
+                        )}
+                        {bd.audio.isOriginalAudio && (
+                          <Badge className="ml-2 bg-purple-100 text-purple-700 text-[10px]">
+                            Original
+                          </Badge>
+                        )}
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
 
         {/* Viral Status Card */}
         {asset.isViral && (

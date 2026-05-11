@@ -849,6 +849,12 @@ model Asset {
   baselineMetrics Json?     @map("baseline_metrics") // influencer's avg at time of posting
   viralDetectedAt DateTime? @map("viral_detected_at") @db.Timestamptz()
 
+  // Bright Data scrape snapshot — caption, hashtags, audio, duration, etc.
+  // Populated by /api/assets/[id]/refresh-brightdata. Independent of viral
+  // metricsSnapshot above. Safe to null-out to revert.
+  brightDataSnapshot Json?  @map("brightdata_snapshot")
+  brightDataSyncedAt DateTime? @map("brightdata_synced_at") @db.Timestamptz()
+
   // Per-asset payment tracking. Independent of the existing collab-level
   // Payment model — we mark assets as paid in bulk via the /assets list
   // multi-select flow, payment-gateway integration plugs in later.

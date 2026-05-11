@@ -1,7 +1,12 @@
 export const revalidate = 60;
 
 import { prisma } from "@/lib/db";
-import { calculateEarnedMediaValue } from "@/lib/viral-detection";
+import {
+  calculateEarnedMediaValue,
+  calculateBaseline,
+  calculateVirality,
+  type ViralityResult,
+} from "@/lib/viral-detection";
 import {
   Card,
   CardContent,
@@ -17,7 +22,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Flame, TrendingUp, Award, DollarSign, ExternalLink } from "lucide-react";
+import {
+  Flame,
+  TrendingUp,
+  Award,
+  DollarSign,
+  ExternalLink,
+  Sparkles,
+  Info,
+} from "lucide-react";
 
 function formatIndian(value: number): string {
   return new Intl.NumberFormat("en-IN").format(value);
@@ -44,69 +57,145 @@ function platformBadgeClass(platform: string) {
   return map[platform] || "bg-gray-100 text-gray-800";
 }
 
-function multiplierColor(multiplier: number): string {
-  if (multiplier > 10) return "text-red-600 font-bold";
-  if (multiplier > 5) return "text-orange-600 font-semibold";
-  return "text-yellow-600 font-medium";
+function scoreColor(score: number) {
+  if (score >= 80) return "text-red-600 font-bold";
+  if (score >= 70) return "text-orange-600 font-bold";
+  if (score >= 50) return "text-amber-600 font-semibold";
+  return "text-gray-600 font-medium";
+}
+
+function tierBadgeClass(tier: ViralityResult["tier"]) {
+  if (tier === "viral") return "bg-orange-100 text-orange-800";
+  if (tier === "trending") return "bg-amber-100 text-amber-800";
+  return "bg-gray-100 text-gray-700";
+}
+
+function tierLabel(tier: ViralityResult["tier"]) {
+  if (tier === "viral") return "🔥 Viral";
+  if (tier === "trending") return "📈 Trending";
+  return "Normal";
+}
+
+// CPV: per-asset slice of the collab's payable amount divided by views.
+// Mirrors the asset detail page calculation.
+function computeCpv(
+  asset: {
+    views: number | null;
+    collaboration: {
+      type: string;
+      agreedAmount: unknown;
+      payableAmount: unknown;
+      _count: { assets: number };
+    } | null;
+  },
+): { value: number | null; isBarter: boolean } {
+  const collab = asset.collaboration;
+  if (!collab) return { value: null, isBarter: false };
+  if (collab.type === "barter") return { value: null, isBarter: true };
+  if (!asset.views || asset.views <= 0) return { value: null, isBarter: false };
+  const total = Number(collab.payableAmount ?? collab.agreedAmount ?? 0);
+  const count = collab._count?.assets || 1;
+  if (total <= 0) return { value: null, isBarter: false };
+  const cpv = total / count / asset.views;
+  return { value: cpv, isBarter: false };
 }
 
 export default async function ViralContentPage() {
   const ninetyDaysAgo = new Date();
   ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
 
-  const sixMonthsAgo = new Date();
-  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-
-  // Fetch viral assets from last 90 days (capped to keep dashboard fast)
-  const viralAssets = await prisma.asset.findMany({
+  // Pull every asset with measurable activity in the last 90 days, not just
+  // pre-flagged isViral. We score them all live and partition into tiers.
+  const candidates = await prisma.asset.findMany({
     where: {
-      isViral: true,
-      viralDetectedAt: { gte: ninetyDaysAgo },
+      OR: [
+        { isViral: true, viralDetectedAt: { gte: ninetyDaysAgo } },
+        {
+          views: { gt: 0 },
+          publishedAt: { gte: ninetyDaysAgo },
+        },
+      ],
     },
     include: {
       influencer: {
-        select: { id: true, name: true, instagramHandle: true },
+        select: {
+          id: true,
+          name: true,
+          instagramHandle: true,
+          igFollowerCount: true,
+        },
       },
       collaboration: {
         select: {
           id: true,
+          type: true,
+          agreedAmount: true,
+          payableAmount: true,
+          _count: { select: { assets: true } },
           campaign: { select: { id: true, name: true } },
         },
       },
     },
-    orderBy: { viralMultiplier: "desc" },
-    take: 100,
+    take: 500,
   });
 
-  // Summary
-  const totalViral = viralAssets.length;
-  const avgMultiplier =
+  // Compute baseline once per influencer (each call is one DB roundtrip).
+  const uniqueInfluencerIds = Array.from(
+    new Set(candidates.map((a) => a.influencer.id)),
+  );
+  const baselines = new Map<
+    string,
+    Awaited<ReturnType<typeof calculateBaseline>>
+  >();
+  await Promise.all(
+    uniqueInfluencerIds.map(async (id) => {
+      baselines.set(id, await calculateBaseline(id));
+    }),
+  );
+
+  // Score every candidate.
+  const scored = candidates.map((a) => {
+    const baseline = baselines.get(a.influencer.id)!;
+    const virality = calculateVirality(a, baseline, a.influencer);
+    const cpv = computeCpv(a);
+    const emv = calculateEarnedMediaValue(a);
+    return { asset: a, virality, cpv, emv };
+  });
+
+  // Sort by score desc, then by views desc as tiebreaker.
+  scored.sort((a, b) => {
+    if (b.virality.score !== a.virality.score) {
+      return b.virality.score - a.virality.score;
+    }
+    return (b.asset.views ?? 0) - (a.asset.views ?? 0);
+  });
+
+  const viralRows = scored.filter((s) => s.virality.tier === "viral").slice(0, 100);
+  const trendingRows = scored
+    .filter((s) => s.virality.tier === "trending")
+    .slice(0, 30);
+
+  // Summary aggregates use the viral set only — consistent with the prior
+  // page's KPIs.
+  const totalViral = viralRows.length;
+  const avgScore =
     totalViral > 0
       ? Math.round(
-          (viralAssets.reduce(
-            (sum, a) => sum + (a.viralMultiplier ? Number(a.viralMultiplier) : 0),
-            0
-          ) /
-            totalViral) *
-            100
-        ) / 100
+          viralRows.reduce((sum, r) => sum + r.virality.score, 0) / totalViral,
+        )
       : 0;
 
   const platformCounts: Record<string, number> = {};
-  for (const asset of viralAssets) {
-    platformCounts[asset.platform] =
-      (platformCounts[asset.platform] || 0) + 1;
+  for (const row of viralRows) {
+    platformCounts[row.asset.platform] =
+      (platformCounts[row.asset.platform] || 0) + 1;
   }
   const topPlatform =
-    Object.entries(platformCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ||
-    "N/A";
+    Object.entries(platformCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "N/A";
 
-  const totalEarnedMediaValue = viralAssets.reduce(
-    (sum, asset) => sum + calculateEarnedMediaValue(asset),
-    0
-  );
+  const totalEarnedMediaValue = viralRows.reduce((sum, r) => sum + r.emv, 0);
 
-  // Top influencers
+  // Top influencers — derived from viral rows only.
   const influencerMap: Record<
     string,
     {
@@ -114,72 +203,126 @@ export default async function ViralContentPage() {
       name: string;
       handle: string | null;
       viralCount: number;
-      totalMultiplier: number;
+      totalScore: number;
     }
   > = {};
-  for (const asset of viralAssets) {
-    const inf = asset.influencer;
+  for (const row of viralRows) {
+    const inf = row.asset.influencer;
     if (!influencerMap[inf.id]) {
       influencerMap[inf.id] = {
         id: inf.id,
         name: inf.name,
         handle: inf.instagramHandle,
         viralCount: 0,
-        totalMultiplier: 0,
+        totalScore: 0,
       };
     }
     influencerMap[inf.id].viralCount++;
-    influencerMap[inf.id].totalMultiplier += asset.viralMultiplier
-      ? Number(asset.viralMultiplier)
-      : 0;
+    influencerMap[inf.id].totalScore += row.virality.score;
   }
-
   const topInfluencers = Object.values(influencerMap)
     .sort((a, b) => b.viralCount - a.viralCount)
     .slice(0, 5)
     .map((inf) => ({
       ...inf,
-      avgMultiplier:
-        Math.round((inf.totalMultiplier / inf.viralCount) * 100) / 100,
+      avgScore: Math.round(inf.totalScore / inf.viralCount),
     }));
 
-  // Monthly trend (last 6 months)
-  const allViralForTrend = await prisma.asset.findMany({
-    where: {
-      isViral: true,
-      viralDetectedAt: { gte: sixMonthsAgo },
-    },
-    select: {
-      viralDetectedAt: true,
-      viralMultiplier: true,
-    },
-  });
-
-  const monthlyMap: Record<
-    string,
-    { count: number; totalMultiplier: number }
-  > = {};
-  for (const asset of allViralForTrend) {
-    if (!asset.viralDetectedAt) continue;
-    const date = new Date(asset.viralDetectedAt);
-    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-    if (!monthlyMap[key]) {
-      monthlyMap[key] = { count: 0, totalMultiplier: 0 };
-    }
-    monthlyMap[key].count++;
-    monthlyMap[key].totalMultiplier += asset.viralMultiplier
-      ? Number(asset.viralMultiplier)
-      : 0;
+  function renderRow(row: (typeof scored)[number]) {
+    const a = row.asset;
+    const v = row.virality;
+    const cpvStr = row.cpv.isBarter
+      ? "Barter"
+      : row.cpv.value !== null
+        ? `₹${row.cpv.value < 1 ? row.cpv.value.toFixed(3) : row.cpv.value.toFixed(2)}`
+        : "-";
+    return (
+      <TableRow key={a.id}>
+        <TableCell>
+          <div className="font-medium">{a.influencer.name}</div>
+          {a.influencer.instagramHandle && (
+            <div className="text-xs text-muted-foreground">
+              @{a.influencer.instagramHandle}
+            </div>
+          )}
+        </TableCell>
+        <TableCell>
+          <Badge className={platformBadgeClass(a.platform)}>
+            {a.platform.replace(/_/g, " ")}
+          </Badge>
+        </TableCell>
+        <TableCell>
+          <div className={`text-base ${scoreColor(v.score)}`}>{v.score}</div>
+          <Badge className={`${tierBadgeClass(v.tier)} mt-0.5 text-[10px]`}>
+            {tierLabel(v.tier)}
+          </Badge>
+        </TableCell>
+        <TableCell className="text-right">{formatCompact(a.views)}</TableCell>
+        <TableCell className="text-right">{formatCompact(a.likes)}</TableCell>
+        <TableCell className="text-right">
+          {formatCompact(a.comments)}
+        </TableCell>
+        <TableCell className="text-right">{formatCompact(a.shares)}</TableCell>
+        <TableCell className="text-right">
+          {v.engagementRate !== null ? `${v.engagementRate.toFixed(1)}%` : "-"}
+        </TableCell>
+        <TableCell className="text-right">{cpvStr}</TableCell>
+        <TableCell className="max-w-[260px]">
+          <div className="flex flex-wrap gap-1">
+            {v.signals.length === 0 ? (
+              <span className="text-xs text-muted-foreground">—</span>
+            ) : (
+              v.signals.slice(0, 4).map((s) => (
+                <span
+                  key={s}
+                  className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700"
+                >
+                  {s}
+                </span>
+              ))
+            )}
+          </div>
+        </TableCell>
+        <TableCell>
+          {a.collaboration?.campaign?.name || (
+            <span className="text-muted-foreground">-</span>
+          )}
+        </TableCell>
+        <TableCell>
+          {a.contentUrl ? (
+            (() => {
+              // Show a short, clickable identifier (last path segment of the IG URL).
+              // Falls back to "Open" if the URL doesn't parse.
+              let label = "Open";
+              try {
+                const parts = new URL(a.contentUrl).pathname
+                  .split("/")
+                  .filter(Boolean);
+                const slug = parts[parts.length - 1];
+                if (slug) label = `/${parts[parts.length - 2] ?? ""}/${slug}`;
+              } catch {
+                /* keep default label */
+              }
+              return (
+                <a
+                  href={a.contentUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                  title={a.contentUrl}
+                >
+                  {label}
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              );
+            })()
+          ) : (
+            <span className="text-xs text-muted-foreground">No URL</span>
+          )}
+        </TableCell>
+      </TableRow>
+    );
   }
-
-  const monthlyTrend = Object.entries(monthlyMap)
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([month, data]) => ({
-      month,
-      viralCount: data.count,
-      avgMultiplier:
-        Math.round((data.totalMultiplier / data.count) * 100) / 100,
-    }));
 
   return (
     <div className="space-y-6">
@@ -190,9 +333,77 @@ export default async function ViralContentPage() {
           Viral Content Tracker
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Track content that outperforms influencer baselines across campaigns
+          Score 0-100 from views, engagement, audience break-out, and discussion.
+          Viral ≥ 70 or any metric ≥ 3× baseline. Trending = 40-69.
         </p>
       </div>
+
+      {/* How scoring works — keeps the page self-explanatory for new users */}
+      <details className="rounded-lg border bg-blue-50/40 p-4 text-sm">
+        <summary className="cursor-pointer font-semibold flex items-center gap-2">
+          <Info className="h-4 w-4 text-blue-600" />
+          How is this scored?
+        </summary>
+        <div className="mt-3 space-y-3 text-gray-700">
+          <p>
+            <span className="font-semibold">Two paths to Viral:</span>
+          </p>
+          <ol className="list-decimal pl-5 space-y-1">
+            <li>
+              <span className="font-medium">Hard rule</span> — any metric crosses
+              its threshold vs the influencer&apos;s last-20-asset average:{" "}
+              <span className="font-mono text-xs">
+                views/likes/comments ≥ 3×, shares/saves ≥ 5×
+              </span>
+              .
+            </li>
+            <li>
+              <span className="font-medium">Composite score ≥ 70</span> — weighted
+              blend of 7 signals, rebalanced toward comments + shares (the
+              real algorithmic viral drivers, not raw view count):
+              <ul className="list-disc pl-5 mt-1 space-y-0.5 text-xs">
+                <li>
+                  <span className="font-medium">Comments</span> multiplier — 22%{" "}
+                  <span className="text-gray-500">(real discussion)</span>
+                </li>
+                <li>
+                  <span className="font-medium">Shares</span> multiplier — 18%{" "}
+                  <span className="text-gray-500">
+                    (strongest IG algorithm signal)
+                  </span>
+                </li>
+                <li>Views multiplier — 20%</li>
+                <li>Likes — 12% · Saves — 5%</li>
+                <li>
+                  Reach % (views ÷ follower count) — 13%{" "}
+                  <span className="text-gray-500">
+                    (audience break-out)
+                  </span>
+                </li>
+                <li>Engagement Rate (likes+comments+shares+saves ÷ views) — 10%</li>
+              </ul>
+            </li>
+          </ol>
+          <p className="text-xs text-gray-600">
+            <span className="font-semibold">Tiers:</span> 🔥 Viral = score ≥ 70 OR
+            hard rule fires · 📈 Trending = 40-69 · Normal = below 40 (not shown).
+          </p>
+          <p className="text-xs text-gray-600">
+            <span className="font-semibold">&quot;Views&quot; = plays</span>{" "}
+            (replays included) — matches what Instagram shows publicly. Bright
+            Data also returns a smaller unique-viewer figure, stored on the asset
+            for analytics but not displayed.
+          </p>
+          <p className="text-xs text-gray-600">
+            <span className="font-semibold">Caveats:</span> Saves / Reach /
+            Impressions are private to the account owner — Bright Data can&apos;t
+            scrape them, so they&apos;re usually null and quietly drop from the
+            score. Score is therefore weighted toward what we can measure. With
+            single-snapshot data this is detection, not prediction — velocity-based
+            forecasting requires time-series snapshots which aren&apos;t built yet.
+          </p>
+        </div>
+      </details>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -212,32 +423,28 @@ export default async function ViralContentPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">
-              Avg Viral Multiplier
+              Avg Virality Score
             </CardTitle>
             <TrendingUp className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{avgMultiplier}x</div>
+            <div className="text-2xl font-bold">{avgScore}</div>
             <p className="text-xs text-muted-foreground">
-              Above influencer baseline
+              Across viral pieces
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">
-              Best Platform
-            </CardTitle>
+            <CardTitle className="text-sm font-medium">Best Platform</CardTitle>
             <Award className="h-4 w-4 text-purple-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold capitalize">
               {topPlatform.replace(/_/g, " ")}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Most viral content
-            </p>
+            <p className="text-xs text-muted-foreground">Most viral content</p>
           </CardContent>
         </Card>
 
@@ -250,136 +457,89 @@ export default async function ViralContentPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {"\u20B9"}{formatIndian(Math.round(totalEarnedMediaValue))}
+              {"₹"}
+              {formatIndian(Math.round(totalEarnedMediaValue))}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Viral content only
-            </p>
+            <p className="text-xs text-muted-foreground">Viral content only</p>
           </CardContent>
         </Card>
       </div>
 
       {/* Viral Content Table */}
-      <div className="rounded-lg border bg-white">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Influencer</TableHead>
-              <TableHead>Platform</TableHead>
-              <TableHead>Content Type</TableHead>
-              <TableHead className="text-right">Views</TableHead>
-              <TableHead className="text-right">Viral Multiplier</TableHead>
-              <TableHead className="text-right">Likes</TableHead>
-              <TableHead className="text-right">Shares</TableHead>
-              <TableHead className="text-right">Eng. Rate</TableHead>
-              <TableHead>Campaign</TableHead>
-              <TableHead>Detected</TableHead>
-              <TableHead>Link</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {viralAssets.length === 0 ? (
+      <div>
+        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+          <Flame className="h-4 w-4 text-orange-500" />
+          Viral Leaderboard
+        </h2>
+        <div className="rounded-lg border bg-white overflow-x-auto">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell
-                  colSpan={11}
-                  className="text-center text-gray-500 py-8"
-                >
-                  No viral content detected yet. Run a scan to check recent
-                  assets.
-                </TableCell>
+                <TableHead>Influencer</TableHead>
+                <TableHead>Platform</TableHead>
+                <TableHead>Score</TableHead>
+                <TableHead className="text-right">Views</TableHead>
+                <TableHead className="text-right">Likes</TableHead>
+                <TableHead className="text-right">Comments</TableHead>
+                <TableHead className="text-right">Shares</TableHead>
+                <TableHead className="text-right">Eng. Rate</TableHead>
+                <TableHead className="text-right">CPV</TableHead>
+                <TableHead>Signals</TableHead>
+                <TableHead>Campaign</TableHead>
+                <TableHead>Link</TableHead>
               </TableRow>
-            ) : (
-              viralAssets.map((asset) => {
-                const multiplier = asset.viralMultiplier
-                  ? Number(asset.viralMultiplier)
-                  : 0;
-                const totalEngagements =
-                  (asset.likes ?? 0) +
-                  (asset.comments ?? 0) +
-                  (asset.shares ?? 0) +
-                  (asset.saves ?? 0);
-                const engRate =
-                  asset.views && asset.views > 0
-                    ? ((totalEngagements / asset.views) * 100).toFixed(1)
-                    : "-";
-
-                return (
-                  <TableRow key={asset.id}>
-                    <TableCell>
-                      <div className="font-medium">{asset.influencer.name}</div>
-                      {asset.influencer.instagramHandle && (
-                        <div className="text-xs text-muted-foreground">
-                          @{asset.influencer.instagramHandle}
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={platformBadgeClass(asset.platform)}>
-                        {asset.platform.replace(/_/g, " ")}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">
-                        {asset.contentType.replace(/_/g, " ")}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {formatCompact(asset.views)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <span className={multiplierColor(multiplier)}>
-                        {multiplier}x {"\uD83D\uDD25"}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {formatCompact(asset.likes)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {formatCompact(asset.shares)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {engRate !== "-" ? `${engRate}%` : "-"}
-                    </TableCell>
-                    <TableCell>
-                      {asset.collaboration?.campaign?.name || (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {asset.viralDetectedAt
-                        ? new Date(asset.viralDetectedAt).toLocaleDateString(
-                            "en-IN"
-                          )
-                        : "-"}
-                    </TableCell>
-                    <TableCell>
-                      {asset.contentUrl ? (
-                        <a
-                          href={asset.contentUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-800 inline-flex items-center gap-1"
-                        >
-                          <ExternalLink className="h-4 w-4" />
-                        </a>
-                      ) : (
-                        "-"
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {viralRows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={12} className="text-center text-gray-500 py-8">
+                    No viral content in the last 90 days. Refresh asset metrics from
+                    Bright Data to populate.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                viralRows.map(renderRow)
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
+
+      {/* Trending (Near-Viral) */}
+      {trendingRows.length > 0 && (
+        <div>
+          <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-amber-500" />
+            Trending — Approaching Viral (score 40-69)
+          </h2>
+          <div className="rounded-lg border bg-white overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Influencer</TableHead>
+                  <TableHead>Platform</TableHead>
+                  <TableHead>Score</TableHead>
+                  <TableHead className="text-right">Views</TableHead>
+                  <TableHead className="text-right">Likes</TableHead>
+                  <TableHead className="text-right">Comments</TableHead>
+                  <TableHead className="text-right">Shares</TableHead>
+                  <TableHead className="text-right">Eng. Rate</TableHead>
+                  <TableHead className="text-right">CPV</TableHead>
+                  <TableHead>Signals</TableHead>
+                  <TableHead>Campaign</TableHead>
+                  <TableHead>Link</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>{trendingRows.map(renderRow)}</TableBody>
+            </Table>
+          </div>
+        </div>
+      )}
 
       {/* Top Influencers */}
       {topInfluencers.length > 0 && (
         <div>
-          <h2 className="text-lg font-semibold mb-3">
-            Top Viral Influencers
-          </h2>
+          <h2 className="text-lg font-semibold mb-3">Top Viral Influencers</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             {topInfluencers.map((inf) => (
               <Card key={inf.id}>
@@ -395,45 +555,12 @@ export default async function ViralContentPage() {
                       {inf.viralCount} viral
                     </span>
                     <span className="text-muted-foreground">
-                      {inf.avgMultiplier}x avg
+                      {inf.avgScore} avg score
                     </span>
                   </div>
                 </CardContent>
               </Card>
             ))}
-          </div>
-        </div>
-      )}
-
-      {/* Monthly Trend */}
-      {monthlyTrend.length > 0 && (
-        <div>
-          <h2 className="text-lg font-semibold mb-3">Monthly Trend</h2>
-          <div className="rounded-lg border bg-white">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Month</TableHead>
-                  <TableHead className="text-right">Viral Count</TableHead>
-                  <TableHead className="text-right">
-                    Avg Multiplier
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {monthlyTrend.map((row) => (
-                  <TableRow key={row.month}>
-                    <TableCell className="font-medium">{row.month}</TableCell>
-                    <TableCell className="text-right">
-                      {row.viralCount}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {row.avgMultiplier}x
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
           </div>
         </div>
       )}
