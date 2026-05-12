@@ -5,6 +5,10 @@ import {
   isCreatorXConfigured,
   CreatorXError,
 } from "@/lib/creatorx";
+import {
+  fetchInstagramProfileFromBrightData,
+  isBrightDataProfileConfigured,
+} from "@/lib/brightdata";
 import { fetchCreatorDetails } from "@/features/discovery/lib/influenzer/profile";
 import { InfluenzerError } from "@/features/discovery/lib/influenzer/auth";
 import { fetchPublicProfile } from "@/lib/instagram";
@@ -192,6 +196,57 @@ export async function GET(
         tier: tierFromFollowers(followers),
       };
       return NextResponse.json(merged);
+    }
+  }
+
+  // Bright Data fallback — fires when CreatorX didn't return data (or isn't
+  // configured). No audience demographics here, but headline metrics
+  // (followers, engagement, posts, avg likes/comments) are reliable.
+  if (isBrightDataProfileConfigured()) {
+    try {
+      const bd = await fetchInstagramProfileFromBrightData(cleanHandle);
+      if (bd && bd.igFollowerCount != null && bd.igFollowerCount > 0) {
+        return NextResponse.json({
+          found: true,
+          source: "brightdata" as const,
+          handle: bd.handle,
+          name: bd.name ?? cleanHandle,
+          bio: bd.bio,
+          profileImageUrl: bd.profileImageUrl,
+          email: bd.email,
+          phone: null,
+          isVerified: bd.isVerified,
+          category: bd.category,
+          igFollowerCount: bd.igFollowerCount,
+          igFollowingCount: bd.igFollowingCount,
+          igPostCount: bd.igPostCount,
+          igEngagementRate: bd.igEngagementRate,
+          igAvgLikes: bd.igAvgLikes,
+          igAvgComments: bd.igAvgComments,
+          igAvgReelViews: bd.igAvgReelViews,
+          igAvgStoryViews: null,
+          igMedianReelViews: null,
+          igLast8ReelViews: [],
+          igCredibilityScore: null,
+          // Audience demographics — null on Bright Data fallback.
+          igAudienceMalePct: null,
+          igAudienceFemalePct: null,
+          igAudienceTopAgeRange: null,
+          igAudienceAgeBreakdown: null,
+          igAudienceTopCities: null,
+          igAudienceTopCountries: null,
+          categories: bd.category ? [bd.category] : [],
+          tier: tierFromFollowers(bd.igFollowerCount),
+          recentReels: [],
+          lastUpdated: null,
+        });
+      }
+    } catch (err) {
+      console.warn(
+        `[culturex/handle] Bright Data fallback failed for @${cleanHandle}:`,
+        err instanceof Error ? err.message : err,
+      );
+      // continue to CultureX / IG-scrape fallbacks
     }
   }
 

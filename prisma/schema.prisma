@@ -140,6 +140,7 @@ enum PaymentStatus {
   paid
   failed
   cancelled
+  invoice_issue
 }
 
 enum InvoiceStatus {
@@ -278,6 +279,10 @@ model User {
   influencerSearches       InfluencerSearch[]      @relation("UserInfluencerSearches")
   assignedSuggestions      InfluencerSuggestion[]  @relation("UserAssignedSuggestions")
   reviewedSuggestions      InfluencerSuggestion[]  @relation("UserReviewedSuggestions")
+  submittedProposals       CollaborationProposal[] @relation("SubmittedProposals")
+  reviewedProposals        CollaborationProposal[] @relation("ReviewedProposals")
+  lockedDeals              Collaboration[]         @relation("DealLockedCollaborations")
+  notifications            Notification[]          @relation("UserNotifications")
 
   @@map("users")
 }
@@ -581,6 +586,12 @@ model Collaboration {
   approvedAt     DateTime?       @map("approved_at") @db.Timestamptz()
   approvalNotes  String?         @map("approval_notes")
 
+  // Deal-lock signal — handler flips this when influencer has agreed terms.
+  // Admin sees it via activity log + UI badge. Separate from `status` so the
+  // existing state machine isn't affected.
+  dealLockedAt   DateTime? @map("deal_locked_at") @db.Timestamptz()
+  dealLockedBy   String?   @map("deal_locked_by") @db.Uuid
+
   // Rating
   contentRating Decimal? @map("content_rating") @db.Decimal(2, 1)
   ratingNotes   String?  @map("rating_notes")
@@ -608,6 +619,8 @@ model Collaboration {
   purchaseOrders    PurchaseOrder[]
   contracts         Contract[]
   contentIdeas      ContentIdea[]
+  proposals         CollaborationProposal[]
+  dealLocker        User?                  @relation("DealLockedCollaborations", fields: [dealLockedBy], references: [id])
   statusTransitions StatusTransition[]
 
   @@index([assignedTo])
@@ -1518,4 +1531,91 @@ model DocumentAccessLog {
   @@index([documentId, accessedAt])
   @@index([userId, accessedAt])
   @@map("document_access_log")
+}
+
+// ============================================================
+// NOTIFICATIONS — in-app activity feed for managers/admins/handlers
+// ============================================================
+// Polling-fed for now (client hits GET /api/notifications every 30s). Same
+// table shape will back SSE/WebSocket push later if the deployment moves off
+// serverless. Each row = one recipient; fan-out is done at write time so the
+// read path is a cheap indexed query.
+
+enum NotificationType {
+  proposal_submitted
+  proposal_approved
+  proposal_rejected
+  proposal_counter_offered
+  proposal_accepted_by_influencer
+  deal_locked
+}
+
+model Notification {
+  id          String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  recipientId String           @map("recipient_id") @db.Uuid
+  type        NotificationType
+  title       String
+  body        String?
+  // Where the user should land when they click the notification.
+  actionUrl   String           @map("action_url")
+  // Source entity (e.g. collaboration:<id>) for dedupe / grouping.
+  entityType  String?          @map("entity_type")
+  entityId    String?          @map("entity_id") @db.Uuid
+  // null = unread, set = read at that time.
+  readAt      DateTime?        @map("read_at") @db.Timestamptz()
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz()
+
+  recipient User @relation("UserNotifications", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId, readAt, createdAt])
+  @@map("notifications")
+}
+
+// ============================================================
+// COLLABORATION PROPOSALS — iterative negotiation history
+// ============================================================
+// Each row = one round of "handler proposes terms → admin reviews".
+// Admin can approve, reject, or counter-offer. Handler resubmits.
+// Activity-logged. Distinct from Collaboration.approvalStatus which is the
+// final go/no-go for the whole deal.
+
+enum ProposalStatus {
+  pending_review        // handler submitted, waiting for admin
+  approved              // admin OK'd these terms — handler takes to influencer
+  rejected              // admin said no
+  counter_offered       // admin returned different terms; handler renegotiates
+  accepted_by_influencer // handler reports influencer agreed; ready to lock
+  superseded            // a newer proposal exists
+}
+
+model CollaborationProposal {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collaborationId String   @map("collaboration_id") @db.Uuid
+
+  // Handler's submission
+  submittedBy        String    @map("submitted_by") @db.Uuid
+  submittedAt        DateTime  @default(now()) @map("submitted_at") @db.Timestamptz()
+  proposedAmount     Decimal?  @map("proposed_amount") @db.Decimal(12, 2)
+  proposedGstPct     Decimal?  @map("proposed_gst_pct") @db.Decimal(5, 2)
+  proposedDueDate    DateTime? @map("proposed_due_date") @db.Date
+  proposedTerms      String?   @map("proposed_terms") // handler's notes / context
+  influencerResponse String?   @map("influencer_response") // what handler heard back
+
+  // Admin / manager review
+  status         ProposalStatus @default(pending_review)
+  reviewedBy     String?        @map("reviewed_by") @db.Uuid
+  reviewedAt     DateTime?      @map("reviewed_at") @db.Timestamptz()
+  counterAmount  Decimal?       @map("counter_amount") @db.Decimal(12, 2)
+  counterGstPct  Decimal?       @map("counter_gst_pct") @db.Decimal(5, 2)
+  counterDueDate DateTime?      @map("counter_due_date") @db.Date
+  reviewNotes    String?        @map("review_notes")
+
+  // Relations
+  collaboration Collaboration @relation(fields: [collaborationId], references: [id])
+  submitter     User          @relation("SubmittedProposals", fields: [submittedBy], references: [id])
+  reviewer      User?         @relation("ReviewedProposals", fields: [reviewedBy], references: [id])
+
+  @@index([collaborationId, submittedAt])
+  @@index([status])
+  @@map("collaboration_proposals")
 }

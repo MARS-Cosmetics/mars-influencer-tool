@@ -15,12 +15,19 @@ export default async function AssetsPage({
     search?: string;
     status?: string;
     platform?: string;
+    // Payment-related filters (consolidated from the deleted weekly-run page)
+    paymentStatus?: string; // pending|approved|invoice_issue|paid|unpaid
+    collabType?: string; // paid|barter|all
+    deliveryComplete?: string; // "true" → only show collabs where every asset is published with a URL
   }>;
 }) {
   const params = await searchParams;
   const search = params.search || "";
   const statusFilter = params.status || "";
   const platformFilter = params.platform || "";
+  const paymentStatusFilter = params.paymentStatus || "";
+  const collabTypeFilter = params.collabType || "";
+  const deliveryCompleteOnly = params.deliveryComplete === "true";
 
   const where: Record<string, unknown> = {};
 
@@ -38,6 +45,11 @@ export default async function AssetsPage({
     where.platform = platformFilter;
   }
 
+  // Collab-type filter on the asset's collaboration.
+  if (collabTypeFilter) {
+    where.collaboration = { type: collabTypeFilter };
+  }
+
   const rawAssets = await prisma.asset.findMany({
     where,
     include: {
@@ -50,17 +62,26 @@ export default async function AssetsPage({
           payableAmount: true,
           brand: { select: { name: true } },
           _count: { select: { assets: true } },
+          // Sibling assets for the delivery-complete gate.
+          assets: { select: { id: true, status: true, contentUrl: true } },
+          // Most-recent Payment row so the row knows its real PaymentStatus
+          // and which paymentId to send to /bulk-update-status.
+          payments: {
+            select: { id: true, status: true },
+            orderBy: { createdAt: "desc" },
+            take: 1,
+          },
         },
       },
     },
     orderBy: { createdAt: "desc" },
-    take: 50,
+    take: 100,
   });
 
   // Compute per-asset amount = collab.payableAmount (gross-of-GST, what we
   // actually pay out) divided across that collab's assets. Falls back to
   // agreedAmount for legacy collabs that don't have payableAmount set yet.
-  const assets: AssetRow[] = rawAssets.map((a) => {
+  let assets: AssetRow[] = rawAssets.map((a) => {
     const collab = a.collaboration;
     let perAssetAmount: number | null = null;
     if (collab && collab.type !== "barter") {
@@ -68,6 +89,11 @@ export default async function AssetsPage({
       const count = collab._count.assets || 1;
       if (total > 0) perAssetAmount = total / count;
     }
+    const sibs = collab?.assets ?? [];
+    const allDelivered =
+      sibs.length > 0 &&
+      sibs.every((s) => s.status === "published" && !!s.contentUrl);
+    const payment = collab?.payments?.[0];
     return {
       id: a.id,
       platform: a.platform,
@@ -84,6 +110,9 @@ export default async function AssetsPage({
       paidAt: a.paidAt ? a.paidAt.toISOString() : null,
       influencer: a.influencer,
       perAssetAmount,
+      allDelivered,
+      paymentId: payment?.id ?? null,
+      paymentStatusReal: payment?.status ?? null,
       collaboration: collab
         ? {
             id: collab.id,
@@ -93,6 +122,21 @@ export default async function AssetsPage({
         : null,
     };
   });
+
+  // Post-query filters (these don't translate cleanly to Prisma where).
+  if (deliveryCompleteOnly) {
+    assets = assets.filter((a) => a.allDelivered);
+  }
+  if (paymentStatusFilter) {
+    if (paymentStatusFilter === "unpaid") {
+      assets = assets.filter((a) => a.paymentStatus === "unpaid");
+    } else {
+      // pending/approved/invoice_issue/paid → compare against Payment.status
+      assets = assets.filter(
+        (a) => a.paymentStatusReal === paymentStatusFilter,
+      );
+    }
+  }
 
   const statuses = Object.values(AssetStatus);
   const platforms = Object.values(Platform);
@@ -119,7 +163,7 @@ export default async function AssetsPage({
             className="pl-9"
           />
         </form>
-        <form className="flex items-center gap-2">
+        <form className="flex flex-wrap items-center gap-2">
           <input type="hidden" name="search" value={search} />
           <select
             name="platform"
@@ -145,6 +189,38 @@ export default async function AssetsPage({
               </option>
             ))}
           </select>
+          <select
+            name="collabType"
+            defaultValue={collabTypeFilter}
+            className="h-8 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <option value="">All Collab Types</option>
+            <option value="paid">Paid</option>
+            <option value="barter">Barter</option>
+            <option value="pr_gifting">PR Gifting</option>
+          </select>
+          <select
+            name="paymentStatus"
+            defaultValue={paymentStatusFilter}
+            className="h-8 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <option value="">Any Payment Status</option>
+            <option value="unpaid">Unpaid (no Payment row yet)</option>
+            <option value="pending">Pending Approval</option>
+            <option value="approved">Approved for Payment</option>
+            <option value="invoice_issue">Invoice Issue</option>
+            <option value="paid">Payment Completed</option>
+          </select>
+          <label className="flex h-8 items-center gap-2 rounded-lg border border-input bg-transparent px-2.5 text-sm">
+            <input
+              type="checkbox"
+              name="deliveryComplete"
+              value="true"
+              defaultChecked={deliveryCompleteOnly}
+              className="h-3.5 w-3.5"
+            />
+            <span>Delivery complete only</span>
+          </label>
           <Button type="submit" variant="outline" size="sm">
             Filter
           </Button>

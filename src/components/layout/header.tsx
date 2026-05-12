@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession, signOut } from "next-auth/react";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -15,18 +15,89 @@ import {
   PopoverTrigger,
   PopoverContent,
 } from "@/components/ui/popover";
-import { NotificationsPanel } from "@/components/notifications-panel";
+import {
+  NotificationsPanel,
+  type NotificationItem,
+} from "@/components/notifications-panel";
 import { LogOut, Bell } from "lucide-react";
 
-export function Header() {
-  const { data: session } = useSession();
-  const [hasUnread] = useState(true);
+const POLL_INTERVAL_MS = 30_000;
 
-  const initials = session?.user?.name
-    ?.split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase() ?? "?";
+export function Header() {
+  const { data: session, status } = useSession();
+  const [items, setItems] = useState<NotificationItem[]>([]);
+  const [unread, setUnread] = useState(0);
+  const inFlight = useRef(false);
+
+  const refresh = useCallback(async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    try {
+      const res = await fetch("/api/notifications?limit=30", {
+        cache: "no-store",
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        items?: NotificationItem[];
+        unreadCount?: number;
+      };
+      // Defensive: API errors, malformed payload, or partial responses
+      // would otherwise blow up the panel's items.length check.
+      setItems(Array.isArray(data.items) ? data.items : []);
+      setUnread(typeof data.unreadCount === "number" ? data.unreadCount : 0);
+    } catch {
+      // swallow — next poll will retry
+    } finally {
+      inFlight.current = false;
+    }
+  }, []);
+
+  // Initial fetch + polling. Only runs when authenticated.
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    void refresh();
+    const interval = setInterval(refresh, POLL_INTERVAL_MS);
+    // Also re-poll when the tab regains focus so users see fresh state
+    // immediately after coming back from another tab.
+    const onFocus = () => void refresh();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [status, refresh]);
+
+  async function handleMarkRead(id: string) {
+    // Optimistic update so the dropdown feels instant.
+    setItems((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, readAt: new Date().toISOString() } : n)),
+    );
+    setUnread((c) => Math.max(0, c - 1));
+    try {
+      await fetch(`/api/notifications/${id}/read`, { method: "POST" });
+    } catch {
+      // server will re-sync on next poll
+    }
+  }
+
+  async function handleMarkAllRead() {
+    setItems((prev) =>
+      prev.map((n) => ({ ...n, readAt: n.readAt ?? new Date().toISOString() })),
+    );
+    setUnread(0);
+    try {
+      await fetch("/api/notifications/mark-all-read", { method: "POST" });
+    } catch {
+      // ignored — next poll resyncs
+    }
+  }
+
+  const initials =
+    session?.user?.name
+      ?.split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase() ?? "?";
 
   return (
     <header className="flex h-14 items-center justify-between border-b border-zinc-200 bg-white px-6">
@@ -35,12 +106,19 @@ export function Header() {
         <Popover>
           <PopoverTrigger className="relative flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600">
             <Bell className="h-4 w-4" />
-            {hasUnread && (
-              <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[#A6192E] ring-2 ring-white" />
+            {unread > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[#A6192E] px-1 text-[10px] font-semibold text-white ring-2 ring-white">
+                {unread > 99 ? "99+" : unread}
+              </span>
             )}
           </PopoverTrigger>
           <PopoverContent side="bottom" align="end" className="w-auto p-0">
-            <NotificationsPanel />
+            <NotificationsPanel
+              items={items}
+              unreadCount={unread}
+              onMarkRead={handleMarkRead}
+              onMarkAllRead={handleMarkAllRead}
+            />
           </PopoverContent>
         </Popover>
 

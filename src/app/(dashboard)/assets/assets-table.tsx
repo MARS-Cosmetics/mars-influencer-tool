@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
   Table,
   TableBody,
@@ -13,7 +14,13 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ExternalLink, IndianRupee, CheckCircle2 } from "lucide-react";
+import {
+  ExternalLink,
+  IndianRupee,
+  CheckCircle2,
+  Download,
+  Loader2,
+} from "lucide-react";
 
 export interface AssetRow {
   id: string;
@@ -31,12 +38,25 @@ export interface AssetRow {
   influencer: { id: string; name: string };
   /** Computed server-side: collab.payableAmount ÷ assets.count for that collab. */
   perAssetAmount: number | null;
+  /** True when every asset on this row's collab is published with a URL. */
+  allDelivered: boolean;
+  /** Latest Payment.id on the collab, if any. Null for barter collabs. */
+  paymentId: string | null;
+  /** Latest Payment.status (PaymentStatus enum), if any. */
+  paymentStatusReal: string | null;
   collaboration: {
     id: string;
     type: string;
     brand: { name: string } | null;
   } | null;
 }
+
+const PAYMENT_STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: "pending", label: "Pending Approval" },
+  { value: "approved", label: "Approved for Payment" },
+  { value: "invoice_issue", label: "Invoice Issue" },
+  { value: "paid", label: "Payment Completed" },
+];
 
 function formatNumber(value: number | null | undefined): string {
   if (value === null || value === undefined) return "-";
@@ -74,21 +94,17 @@ interface Props {
 export function AssetsTable({ assets }: Props) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const [bulkStatus, setBulkStatus] = useState("paid");
 
-  // Only unpaid, non-barter assets with a known amount can be selected.
-  // Barter has no money component — explicitly excluded so the checkbox is
-  // disabled and the row is clearly labeled.
+  // Selectable = anything not already fully paid. Barter rows are now
+  // selectable (Excel includes them with blank bank columns). The Make
+  // Payment action below additionally filters to non-barter with an amount.
   const selectable = useMemo(
     () =>
       new Set(
         assets
-          .filter(
-            (a) =>
-              a.paymentStatus !== "paid" &&
-              a.collaboration?.type !== "barter" &&
-              a.perAssetAmount != null &&
-              a.perAssetAmount > 0,
-          )
+          .filter((a) => a.paymentStatus !== "paid")
           .map((a) => a.id),
       ),
     [assets],
@@ -123,18 +139,112 @@ export function AssetsTable({ assets }: Props) {
     (sum, a) => sum + (a.perAssetAmount ?? 0),
     0,
   );
+  // Subset of selection that can be sent to /payments/assets (non-barter
+  // with a non-zero amount). Excel + status actions work on the full selection.
+  const makePayableCount = selectedAssets.filter(
+    (a) =>
+      a.collaboration?.type !== "barter" &&
+      a.perAssetAmount != null &&
+      a.perAssetAmount > 0,
+  ).length;
 
   function makePayment() {
-    if (selected.size === 0) return;
-    const ids = Array.from(selected).join(",");
+    const payable = selectedAssets.filter(
+      (a) =>
+        a.collaboration?.type !== "barter" &&
+        a.perAssetAmount != null &&
+        a.perAssetAmount > 0,
+    );
+    if (payable.length === 0) return;
+    const ids = payable.map((a) => a.id).join(",");
     router.push(`/payments/assets?ids=${encodeURIComponent(ids)}`);
+  }
+
+  async function downloadExcel() {
+    if (selected.size === 0) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/payments/export-excel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assetIds: Array.from(selected) }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data?.error || `Export failed (${res.status})`);
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "payments.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success(`Excel ready — ${selected.size} row(s)`);
+    } catch (e) {
+      console.error("[assets] export failed", e);
+      toast.error("Export failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function applyBulkStatus() {
+    // Barter rows have no Payment row to update — skip them.
+    const barterCount = selectedAssets.filter((a) => !a.paymentId).length;
+    const paymentIds = Array.from(
+      new Set(
+        selectedAssets
+          .map((a) => a.paymentId)
+          .filter((id): id is string => !!id),
+      ),
+    );
+    if (paymentIds.length === 0) {
+      toast.error(
+        "No Payment records to update in selection (barter rows or rows without a payment). Use 'Make Payment' first to create them.",
+      );
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await fetch("/api/payments/bulk-update-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentIds, status: bulkStatus }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data?.error || `Update failed (${res.status})`);
+        return;
+      }
+      const friendly =
+        PAYMENT_STATUS_OPTIONS.find((o) => o.value === bulkStatus)?.label ||
+        bulkStatus;
+      toast.success(
+        `Marked ${data.updated ?? paymentIds.length} payment(s) as ${friendly}${
+          barterCount > 0
+            ? ` (skipped ${barterCount} barter row${barterCount === 1 ? "" : "s"})`
+            : ""
+        }`,
+      );
+      setSelected(new Set());
+      router.refresh();
+    } catch (e) {
+      console.error("[assets] bulk-update failed", e);
+      toast.error("Update failed");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
     <>
       {/* Bulk action bar — only when at least one selectable asset is checked */}
       {selected.size > 0 && (
-        <div className="sticky top-2 z-10 flex items-center justify-between rounded-lg border bg-blue-50 px-4 py-2 shadow-sm">
+        <div className="sticky top-2 z-10 flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-blue-50 px-4 py-2 shadow-sm">
           <div className="flex items-center gap-3 text-sm">
             <span className="font-medium text-blue-900">
               {selected.size} asset{selected.size > 1 ? "s" : ""} selected
@@ -147,17 +257,61 @@ export function AssetsTable({ assets }: Props) {
               })}
             </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setSelected(new Set())}
+              disabled={busy}
             >
               Clear
             </Button>
-            <Button size="sm" onClick={makePayment}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void downloadExcel()}
+              disabled={busy}
+              title="Download finance team Excel for selected assets"
+            >
+              {busy ? (
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="mr-1 h-4 w-4" />
+              )}
+              Excel
+            </Button>
+            <select
+              value={bulkStatus}
+              onChange={(e) => setBulkStatus(e.target.value)}
+              disabled={busy}
+              className="h-8 rounded-md border border-input bg-white px-2 text-xs outline-none"
+            >
+              {PAYMENT_STATUS_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  Mark: {o.label}
+                </option>
+              ))}
+            </select>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void applyBulkStatus()}
+              disabled={busy}
+            >
+              Apply
+            </Button>
+            <Button
+              size="sm"
+              onClick={makePayment}
+              disabled={busy || makePayableCount === 0}
+              title={
+                makePayableCount === 0
+                  ? "Selection has no non-barter rows with an amount"
+                  : `Create Payment records for ${makePayableCount} row(s)`
+              }
+            >
               <IndianRupee className="mr-1 h-4 w-4" />
-              Make Payment
+              Make Payment ({makePayableCount})
             </Button>
           </div>
         </div>
@@ -220,11 +374,11 @@ export function AssetsTable({ assets }: Props) {
                         disabled={!isSelectable}
                         title={
                           isPaid
-                            ? "Already paid"
+                            ? "Already paid — selection locked"
                             : isBarter
-                              ? "Barter collaboration — no payment to process"
+                              ? "Barter — selectable for Excel only (no Payment record to update)"
                               : asset.perAssetAmount == null
-                                ? "No amount set on collaboration"
+                                ? "No amount set — Excel only, can't create payment record"
                                 : ""
                         }
                         className="h-4 w-4 rounded border-gray-300 disabled:opacity-40 disabled:cursor-not-allowed"

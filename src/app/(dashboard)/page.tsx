@@ -11,9 +11,15 @@ import {
   Image,
   TrendingUp,
   ArrowUpRight,
+  Eye,
+  Heart,
+  MessageCircle,
+  IndianRupee,
+  Flame,
 } from "lucide-react";
 import Link from "next/link";
 import { PendingWork } from "./pending-work";
+import { DashboardTimeFilter } from "./dashboard-time-filter";
 
 async function getStats() {
   const [
@@ -66,6 +72,108 @@ async function getRecentCollabs() {
   });
 }
 
+/**
+ * Time-scoped performance metrics. Window is anchored on Asset.publishedAt
+ * so "Total Views in last 30d" means "views on content that went live in
+ * those 30 days". Spend is computed per-asset (collab.payableAmount divided
+ * across that collab's assets) so views and spend describe the same
+ * artifacts and CPV stays apples-to-apples. Barter collabs contribute views
+ * but ₹0 spend (CPV math skips them).
+ */
+async function getTimedMetrics(from: Date, to: Date) {
+  const assets = await prisma.asset.findMany({
+    where: {
+      publishedAt: { gte: from, lte: to },
+    },
+    select: {
+      id: true,
+      views: true,
+      likes: true,
+      comments: true,
+      isViral: true,
+      collaboration: {
+        select: {
+          type: true,
+          payableAmount: true,
+          agreedAmount: true,
+          _count: { select: { assets: true } },
+        },
+      },
+    },
+  });
+
+  let totalViews = 0;
+  let totalLikes = 0;
+  let totalComments = 0;
+  let totalSpend = 0;
+  let viralCount = 0;
+  let paidViewsForCpv = 0; // exclude barter views from CPV denominator
+
+  for (const a of assets) {
+    totalViews += a.views ?? 0;
+    totalLikes += a.likes ?? 0;
+    totalComments += a.comments ?? 0;
+    if (a.isViral) viralCount++;
+
+    const collab = a.collaboration;
+    if (!collab || collab.type === "barter") continue;
+    const total = Number(collab.payableAmount ?? collab.agreedAmount ?? 0);
+    const denom = collab._count?.assets || 1;
+    if (total > 0) {
+      const perAssetCost = total / denom;
+      totalSpend += perAssetCost;
+      paidViewsForCpv += a.views ?? 0;
+    }
+  }
+
+  const avgCpv =
+    paidViewsForCpv > 0 ? totalSpend / paidViewsForCpv : null;
+  // Engagement rate = (likes + comments) / views * 100. Shares/saves often
+  // null from scraper so omitted to avoid skewing low.
+  const engagementRate =
+    totalViews > 0
+      ? ((totalLikes + totalComments) / totalViews) * 100
+      : null;
+
+  return {
+    totalViews,
+    totalLikes,
+    totalComments,
+    totalSpend,
+    avgCpv,
+    engagementRate,
+    viralCount,
+    assetCount: assets.length,
+  };
+}
+
+function parseRange(searchParams: { from?: string; to?: string }): {
+  from: Date;
+  to: Date;
+} {
+  const fromStr = searchParams.from;
+  const toStr = searchParams.to;
+  const now = new Date();
+  const defaultFrom = new Date();
+  defaultFrom.setDate(defaultFrom.getDate() - 30);
+  const from = fromStr ? new Date(fromStr) : defaultFrom;
+  const to = toStr ? new Date(toStr) : now;
+  // Treat `to` as end-of-day so "today" includes content published today.
+  to.setHours(23, 59, 59, 999);
+  return { from, to };
+}
+
+function formatCompactInt(n: number): string {
+  if (n >= 10_000_000) return `${(n / 10_000_000).toFixed(1)}Cr`;
+  if (n >= 100_000) return `${(n / 100_000).toFixed(1)}L`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return n.toLocaleString("en-IN");
+}
+
+function formatInr(n: number): string {
+  return `₹${formatCompactInt(Math.round(n))}`;
+}
+
 const statusColors: Record<string, string> = {
   draft: "bg-zinc-100 text-zinc-600",
   outreach: "bg-amber-50 text-amber-700",
@@ -78,11 +186,73 @@ const statusColors: Record<string, string> = {
   cancelled: "bg-red-50 text-red-600",
 };
 
-export default async function DashboardPage() {
-  const [stats, recentCollabs] = await Promise.all([
+export default async function DashboardPage(props: {
+  searchParams: Promise<{ from?: string; to?: string }>;
+}) {
+  const searchParams = await props.searchParams;
+  const { from, to } = parseRange(searchParams);
+  const [stats, recentCollabs, timed] = await Promise.all([
     getStats(),
     getRecentCollabs(),
+    getTimedMetrics(from, to),
   ]);
+
+  const metricCards = [
+    {
+      title: "Total Views",
+      value: formatCompactInt(timed.totalViews),
+      subtitle: `${timed.assetCount} asset${timed.assetCount === 1 ? "" : "s"} in window`,
+      icon: Eye,
+      color: "text-sky-600",
+      bg: "bg-sky-50",
+    },
+    {
+      title: "Total Likes",
+      value: formatCompactInt(timed.totalLikes),
+      subtitle: "across all assets",
+      icon: Heart,
+      color: "text-pink-600",
+      bg: "bg-pink-50",
+    },
+    {
+      title: "Total Comments",
+      value: formatCompactInt(timed.totalComments),
+      subtitle: "discussion volume",
+      icon: MessageCircle,
+      color: "text-violet-600",
+      bg: "bg-violet-50",
+    },
+    {
+      title: "Total Spend",
+      value: formatInr(timed.totalSpend),
+      subtitle: "paid collabs only (no barter)",
+      icon: IndianRupee,
+      color: "text-emerald-600",
+      bg: "bg-emerald-50",
+    },
+    {
+      title: "Avg CPV",
+      value:
+        timed.avgCpv !== null
+          ? `₹${timed.avgCpv < 1 ? timed.avgCpv.toFixed(3) : timed.avgCpv.toFixed(2)}`
+          : "—",
+      subtitle: "cost per view (paid only)",
+      icon: TrendingUp,
+      color: "text-amber-600",
+      bg: "bg-amber-50",
+    },
+    {
+      title: "Viral Assets",
+      value: timed.viralCount.toString(),
+      subtitle:
+        timed.engagementRate !== null
+          ? `Avg ER: ${timed.engagementRate.toFixed(1)}%`
+          : "—",
+      icon: Flame,
+      color: "text-orange-600",
+      bg: "bg-orange-50",
+    },
+  ];
 
   const cards = [
     {
@@ -153,6 +323,38 @@ export default async function DashboardPage() {
         <p className="mt-1 text-sm text-zinc-500">
           Overview of your influencer operations
         </p>
+      </div>
+
+      {/* Time-scoped metrics */}
+      <div className="space-y-4">
+        <DashboardTimeFilter />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {metricCards.map((card) => (
+            <Card
+              key={card.title}
+              className="border-zinc-200/80 transition-all hover:border-zinc-300 hover:shadow-md"
+            >
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-[13px] font-medium text-zinc-500">
+                      {card.title}
+                    </p>
+                    <p className="mt-2 text-3xl font-semibold tracking-tight text-zinc-900">
+                      {card.value}
+                    </p>
+                    <p className="mt-1 text-xs text-zinc-400">{card.subtitle}</p>
+                  </div>
+                  <div
+                    className={`flex h-10 w-10 items-center justify-center rounded-xl ${card.bg}`}
+                  >
+                    <card.icon className={`h-5 w-5 ${card.color}`} />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
 
       {/* Stats Grid */}

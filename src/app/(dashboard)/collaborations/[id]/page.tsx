@@ -20,6 +20,7 @@ import { EditableField } from "./editable-fields";
 import { InlineStatusSelect } from "../inline-status-select";
 import { SpocCard } from "@/components/spoc-card";
 import { auth } from "@/lib/auth";
+import { ProposalsPanel } from "./proposals-panel";
 import {
   ArrowLeft,
   Trash2,
@@ -126,13 +127,18 @@ const parcelStatusColors: Record<string, string> = {
 
 export default async function CollaborationDetailPage(props: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ needsDueDate?: string }>;
+  searchParams: Promise<{ needsDueDate?: string; tab?: string }>;
 }) {
   const { id } = await props.params;
 
   const session = await auth();
-  const isAdmin =
-    (session?.user as { role?: string } | undefined)?.role === "admin";
+  const sessionUser = session?.user as
+    | { id?: string; role?: string }
+    | undefined;
+  const userRole = sessionUser?.role;
+  const currentUserId = sessionUser?.id ?? "";
+  const isAdmin = userRole === "admin";
+  const isAdminOrManager = userRole === "admin" || userRole === "manager";
 
   const collaboration = await prisma.collaboration.findUnique({
     where: { id },
@@ -176,6 +182,14 @@ export default async function CollaborationDetailPage(props: {
           },
         },
       },
+      proposals: {
+        orderBy: { submittedAt: "desc" },
+        include: {
+          submitter: { select: { id: true, name: true } },
+          reviewer: { select: { id: true, name: true } },
+        },
+      },
+      dealLocker: { select: { id: true, name: true } },
     },
   });
 
@@ -194,6 +208,19 @@ export default async function CollaborationDetailPage(props: {
   // Check if due date warning is needed
   const searchParams = await props.searchParams;
   const needsDueDate = searchParams?.needsDueDate === "true";
+  // Allow ?tab=proposals (or any valid tab name) to land directly on that
+  // tab — used by notification links so admins go straight to the action.
+  const validTabs = [
+    "overview",
+    "products",
+    "assets",
+    "payments",
+    "parcels",
+    "proposals",
+    "activity",
+  ];
+  const requestedTab = searchParams?.tab ?? "";
+  const initialTab = validTabs.includes(requestedTab) ? requestedTab : "overview";
 
   // deliverables are now shown as linked assets — no need to parse JSON
 
@@ -249,7 +276,7 @@ export default async function CollaborationDetailPage(props: {
       )}
 
       {/* Tabs */}
-      <Tabs defaultValue={needsDueDate ? "overview" : "overview"}>
+      <Tabs defaultValue={needsDueDate ? "overview" : initialTab}>
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="products">
@@ -267,6 +294,14 @@ export default async function CollaborationDetailPage(props: {
           <TabsTrigger value="parcels">
             <Truck className="mr-1 h-3.5 w-3.5" />
             PR Parcels ({collaboration.prParcels.length})
+          </TabsTrigger>
+          <TabsTrigger value="proposals">
+            Proposals ({collaboration.proposals.length})
+            {collaboration.dealLockedAt && (
+              <Badge className="ml-1 bg-emerald-100 text-emerald-700 text-[10px]">
+                Locked
+              </Badge>
+            )}
           </TabsTrigger>
           <TabsTrigger value="activity">
             Activity Log ({activityLogs.length})
@@ -346,7 +381,11 @@ export default async function CollaborationDetailPage(props: {
                   <EditableField
                     collaborationId={collaboration.id}
                     field="agreedAmount"
-                    value={collaboration.agreedAmount as unknown as number}
+                    value={
+                      collaboration.agreedAmount != null
+                        ? Number(collaboration.agreedAmount)
+                        : null
+                    }
                     type="number"
                     label="Agreed Amount"
                     displayFormat="currency"
@@ -940,6 +979,48 @@ export default async function CollaborationDetailPage(props: {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Proposals / Negotiation Tab */}
+        <TabsContent value="proposals">
+          <ProposalsPanel
+            collaborationId={collaboration.id}
+            isAdminOrManager={isAdminOrManager}
+            isAssignee={collaboration.assignedTo === currentUserId}
+            assigneeName={collaboration.assignee?.name ?? ""}
+            currentUserId={currentUserId}
+            dealLockedAt={
+              collaboration.dealLockedAt
+                ? collaboration.dealLockedAt.toISOString()
+                : null
+            }
+            dealLockedByName={collaboration.dealLocker?.name ?? null}
+            proposals={collaboration.proposals.map((p) => ({
+              id: p.id,
+              submittedAt: p.submittedAt.toISOString(),
+              proposedAmount:
+                p.proposedAmount != null ? Number(p.proposedAmount) : null,
+              proposedGstPct:
+                p.proposedGstPct != null ? Number(p.proposedGstPct) : null,
+              proposedDueDate: p.proposedDueDate
+                ? p.proposedDueDate.toISOString()
+                : null,
+              proposedTerms: p.proposedTerms,
+              influencerResponse: p.influencerResponse,
+              status: p.status,
+              reviewedAt: p.reviewedAt ? p.reviewedAt.toISOString() : null,
+              counterAmount:
+                p.counterAmount != null ? Number(p.counterAmount) : null,
+              counterGstPct:
+                p.counterGstPct != null ? Number(p.counterGstPct) : null,
+              counterDueDate: p.counterDueDate
+                ? p.counterDueDate.toISOString()
+                : null,
+              reviewNotes: p.reviewNotes,
+              submitter: p.submitter,
+              reviewer: p.reviewer,
+            }))}
+          />
         </TabsContent>
 
         {/* Activity Log Tab */}

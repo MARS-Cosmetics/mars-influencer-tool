@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Plus, Trash2, AlertTriangle, CheckCircle2, Package, ExternalLink, MapPin, Phone, Mail, MessageSquare, CreditCard, Tag } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, AlertTriangle, CheckCircle2, Package, ExternalLink, MapPin, Phone, Mail, MessageSquare, CreditCard, Tag, Sparkles, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -90,10 +90,81 @@ export default function NewPrParcelPage() {
   const [allProducts, setAllProducts] = useState<ProductDetail[]>([]);
   const [productOptions, setProductOptions] = useState<SearchableSelectOption[]>([]);
 
-  // Step 1: Influencer
+  // Step 1: Influencer — either pick an existing one or quick-add a new
+  // recipient inline (for one-off PR sends to people not in the catalog).
+  const [recipientMode, setRecipientMode] = useState<"existing" | "quick">(
+    "existing",
+  );
   const [selectedInfluencerId, setSelectedInfluencerId] = useState("");
   const [selectedInfluencer, setSelectedInfluencer] = useState<InfluencerDetail | null>(null);
   const [isLoadingInfluencer, setIsLoadingInfluencer] = useState(false);
+
+  // Quick-add fields. Persist what the user typed even if they toggle modes
+  // so a slip of the radio button doesn't wipe their work.
+  const [quickName, setQuickName] = useState("");
+  const [quickHandle, setQuickHandle] = useState("");
+  const [quickAddress1, setQuickAddress1] = useState("");
+  const [quickAddress2, setQuickAddress2] = useState("");
+  const [quickCity, setQuickCity] = useState("");
+  const [quickState, setQuickState] = useState("");
+  const [quickPincode, setQuickPincode] = useState("");
+  const [quickPhone, setQuickPhone] = useState("");
+  const [quickEmail, setQuickEmail] = useState("");
+  // Profile metrics fetched from CreatorX/Bright Data when user clicks
+  // "Lookup". Stored separately from the raw form fields so we can show
+  // a preview AND pass everything to /api/influencers POST.
+  const [lookupBusy, setLookupBusy] = useState(false);
+  const [lookupProfile, setLookupProfile] = useState<{
+    source?: string;
+    handle?: string;
+    name?: string;
+    bio?: string | null;
+    profileImageUrl?: string | null;
+    email?: string | null;
+    isVerified?: boolean;
+    category?: string | null;
+    igFollowerCount?: number | null;
+    igFollowingCount?: number | null;
+    igPostCount?: number | null;
+    igEngagementRate?: number | null;
+    igAvgLikes?: number | null;
+    igAvgComments?: number | null;
+    igAvgReelViews?: number | null;
+    igLast8ReelViews?: number[];
+    igAudienceMalePct?: number | null;
+    igAudienceFemalePct?: number | null;
+    igAudienceTopAgeRange?: string | null;
+  } | null>(null);
+
+  async function runLookup() {
+    const handle = quickHandle.replace(/^@/, "").trim();
+    if (!handle) {
+      toast.error("Type an Instagram handle first");
+      return;
+    }
+    setLookupBusy(true);
+    setLookupProfile(null);
+    try {
+      const res = await fetch(`/api/culturex/${encodeURIComponent(handle)}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.found === false) {
+        toast.error(data?.error || `No profile data found for @${handle}`);
+        return;
+      }
+      setLookupProfile(data);
+      // Auto-fill name + email if the user hasn't typed something already.
+      if (!quickName && data?.name) setQuickName(data.name);
+      if (!quickEmail && data?.email) setQuickEmail(data.email);
+      toast.success(
+        `Profile loaded${data.source ? ` (source: ${data.source})` : ""}`,
+      );
+    } catch (e) {
+      console.error("[pr-parcels] lookup failed", e);
+      toast.error("Lookup failed — check console");
+    } finally {
+      setLookupBusy(false);
+    }
+  }
 
   // Step 2: Products
   const [parcelProducts, setParcelProducts] = useState<ParcelProduct[]>([]);
@@ -252,15 +323,22 @@ export default function NewPrParcelPage() {
     }
   }
 
-  // Validation
-  const hasAddress = !!selectedInfluencer?.addressLine1;
-  const hasPhone = !!selectedInfluencer?.phone;
+  // Validation. Quick-add mode validates against the inline fields directly
+  // (we'll create the Influencer record on submit).
+  const hasAddress =
+    recipientMode === "quick"
+      ? !!quickAddress1.trim()
+      : !!selectedInfluencer?.addressLine1;
+  const hasPhone =
+    recipientMode === "quick"
+      ? !!quickPhone.trim()
+      : !!selectedInfluencer?.phone;
+  const recipientPicked =
+    recipientMode === "quick"
+      ? !!quickName.trim() && !!quickCity.trim() && !!quickPincode.trim()
+      : !!selectedInfluencerId && !!selectedInfluencer;
   const canProceed =
-    selectedInfluencerId &&
-    selectedInfluencer &&
-    hasAddress &&
-    hasPhone &&
-    parcelProducts.length > 0;
+    recipientPicked && hasAddress && hasPhone && parcelProducts.length > 0;
 
   const hasOutOfStock = stockResults.some((r) => !r.inStock);
 
@@ -288,11 +366,89 @@ export default function NewPrParcelPage() {
 
     setLoading(true);
     try {
+      // Quick-add: create the Influencer row first so the parcel can link to
+      // a real ID. The schema requires an FK; we don't want to make it
+      // nullable just to support one-off sends.
+      let influencerIdForParcel = selectedInfluencerId;
+      if (recipientMode === "quick") {
+        const cleanHandle = quickHandle.replace(/^@/, "").trim();
+        // If the user ran the lookup, include the fetched metrics so the
+        // new Influencer row is enriched (not just a hollow placeholder).
+        const p = lookupProfile;
+        const infRes = await fetch("/api/influencers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: quickName.trim() || p?.name || cleanHandle,
+            instagramHandle: cleanHandle || undefined,
+            addressLine1: quickAddress1.trim() || undefined,
+            addressLine2: quickAddress2.trim() || undefined,
+            city: quickCity.trim() || undefined,
+            state: quickState.trim() || undefined,
+            pincode: quickPincode.trim() || undefined,
+            country: "India",
+            phone: quickPhone.trim() || undefined,
+            email: quickEmail.trim() || p?.email || undefined,
+            status: "prospect",
+            // Profile metrics from Lookup (only set when present so we don't
+            // overwrite anything with nulls).
+            ...(p?.bio ? { bio: p.bio } : {}),
+            ...(p?.profileImageUrl ? { profileImageUrl: p.profileImageUrl } : {}),
+            ...(p?.isVerified ? { isVerified: p.isVerified } : {}),
+            ...(p?.category ? { category: p.category } : {}),
+            ...(p?.igFollowerCount != null
+              ? { igFollowerCount: p.igFollowerCount }
+              : {}),
+            ...(p?.igFollowingCount != null
+              ? { igFollowingCount: p.igFollowingCount }
+              : {}),
+            ...(p?.igPostCount != null ? { igPostCount: p.igPostCount } : {}),
+            ...(p?.igEngagementRate != null
+              ? { igEngagementRate: p.igEngagementRate }
+              : {}),
+            ...(p?.igAvgLikes != null ? { igAvgLikes: p.igAvgLikes } : {}),
+            ...(p?.igAvgComments != null
+              ? { igAvgComments: p.igAvgComments }
+              : {}),
+            ...(p?.igAvgReelViews != null
+              ? { igAvgReelViews: p.igAvgReelViews }
+              : {}),
+            ...(p?.igLast8ReelViews?.length
+              ? { igLast8ReelViews: p.igLast8ReelViews }
+              : {}),
+            ...(p?.igAudienceMalePct != null
+              ? { igAudienceMalePct: p.igAudienceMalePct }
+              : {}),
+            ...(p?.igAudienceFemalePct != null
+              ? { igAudienceFemalePct: p.igAudienceFemalePct }
+              : {}),
+            ...(p?.igAudienceTopAgeRange
+              ? { igAudienceTopAgeRange: p.igAudienceTopAgeRange }
+              : {}),
+            ...(p ? { metricsLastSyncedAt: new Date().toISOString() } : {}),
+          }),
+        });
+        const infData = await infRes.json().catch(() => ({}));
+        if (!infRes.ok) {
+          throw new Error(
+            infData?.error ||
+              `Failed to create recipient (${infRes.status})`,
+          );
+        }
+        influencerIdForParcel = infData.id || infData?.influencer?.id || "";
+        if (!influencerIdForParcel) {
+          throw new Error(
+            "Recipient created but no ID was returned. Cannot continue.",
+          );
+        }
+        toast.success(`Created recipient: ${quickName}`);
+      }
+
       const res = await fetch("/api/pr-parcels", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          influencerId: selectedInfluencerId,
+          influencerId: influencerIdForParcel,
           brandId,
           courierName: courierName || null,
           trackingNumber: trackingNumber || null,
@@ -337,21 +493,280 @@ export default function NewPrParcelPage() {
               <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#A6192E] text-xs font-bold text-white">
                 1
               </span>
-              Select Influencer
+              Recipient
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Influencer *</Label>
-              <SearchableSelect
-                options={influencerOptions}
-                value={selectedInfluencerId}
-                onChange={handleInfluencerSelect}
-                placeholder="Search influencers..."
-                searchPlaceholder="Type to search..."
-                emptyMessage="No influencers found."
-              />
+            {/* Mode toggle — existing catalog vs. quick-add one-off recipient */}
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <label className="inline-flex items-center gap-2 rounded-md border bg-white px-3 py-1.5 cursor-pointer hover:bg-gray-50">
+                <input
+                  type="radio"
+                  name="recipientMode"
+                  checked={recipientMode === "existing"}
+                  onChange={() => setRecipientMode("existing")}
+                />
+                <span>From influencer list</span>
+              </label>
+              <label className="inline-flex items-center gap-2 rounded-md border bg-white px-3 py-1.5 cursor-pointer hover:bg-gray-50">
+                <input
+                  type="radio"
+                  name="recipientMode"
+                  checked={recipientMode === "quick"}
+                  onChange={() => setRecipientMode("quick")}
+                />
+                <span>Quick-add new (one-off / not in catalog)</span>
+              </label>
             </div>
+
+            {recipientMode === "existing" ? (
+              <div className="space-y-2">
+                <Label>Influencer *</Label>
+                <SearchableSelect
+                  options={influencerOptions}
+                  value={selectedInfluencerId}
+                  onChange={handleInfluencerSelect}
+                  placeholder="Search influencers..."
+                  searchPlaceholder="Type to search..."
+                  emptyMessage="No influencers found."
+                />
+              </div>
+            ) : (
+              <div className="rounded-lg border bg-amber-50/40 p-4 space-y-3">
+                <p className="text-xs text-amber-900">
+                  Creating a new minimal influencer record for this PR send.
+                  You can fill in the rest later via{" "}
+                  <Link
+                    href="/influencers"
+                    className="font-medium underline"
+                  >
+                    Influencers
+                  </Link>
+                  .
+                </p>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label htmlFor="quickName">Name *</Label>
+                    <Input
+                      id="quickName"
+                      value={quickName}
+                      onChange={(e) => setQuickName(e.target.value)}
+                      placeholder="Full name"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="quickHandle">Instagram handle</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="quickHandle"
+                        value={quickHandle}
+                        onChange={(e) => setQuickHandle(e.target.value)}
+                        placeholder="@username"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void runLookup()}
+                        disabled={lookupBusy || !quickHandle.trim()}
+                        title="Fetch follower count + engagement from CreatorX / Bright Data"
+                      >
+                        {lookupBusy ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <>
+                            <Sparkles className="mr-1 h-4 w-4" />
+                            Lookup
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="space-y-1 md:col-span-2">
+                    <Label htmlFor="quickAddress1">Address Line 1 *</Label>
+                    <Input
+                      id="quickAddress1"
+                      value={quickAddress1}
+                      onChange={(e) => setQuickAddress1(e.target.value)}
+                      placeholder="Building, street"
+                    />
+                  </div>
+                  <div className="space-y-1 md:col-span-2">
+                    <Label htmlFor="quickAddress2">Address Line 2</Label>
+                    <Input
+                      id="quickAddress2"
+                      value={quickAddress2}
+                      onChange={(e) => setQuickAddress2(e.target.value)}
+                      placeholder="Area, locality (optional)"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="quickCity">City *</Label>
+                    <Input
+                      id="quickCity"
+                      value={quickCity}
+                      onChange={(e) => setQuickCity(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="quickState">State</Label>
+                    <Input
+                      id="quickState"
+                      value={quickState}
+                      onChange={(e) => setQuickState(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="quickPincode">Pincode *</Label>
+                    <Input
+                      id="quickPincode"
+                      value={quickPincode}
+                      onChange={(e) => setQuickPincode(e.target.value)}
+                      placeholder="6-digit"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="quickPhone">Phone *</Label>
+                    <Input
+                      id="quickPhone"
+                      value={quickPhone}
+                      onChange={(e) => setQuickPhone(e.target.value)}
+                      placeholder="+91…"
+                    />
+                  </div>
+                  <div className="space-y-1 md:col-span-2">
+                    <Label htmlFor="quickEmail">Email</Label>
+                    <Input
+                      id="quickEmail"
+                      type="email"
+                      value={quickEmail}
+                      onChange={(e) => setQuickEmail(e.target.value)}
+                      placeholder="optional"
+                    />
+                  </div>
+                </div>
+                {/* Fetched profile preview — shows whatever CreatorX/Bright
+                    Data returned. All these fields also get persisted to the
+                    new Influencer row on submit. */}
+                {lookupProfile && (
+                  <div className="rounded-md border bg-white p-3 space-y-2">
+                    <div className="flex items-center gap-3">
+                      {lookupProfile.profileImageUrl && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={lookupProfile.profileImageUrl}
+                          alt={lookupProfile.name || "profile"}
+                          className="h-12 w-12 rounded-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = "none";
+                          }}
+                        />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-gray-900 truncate">
+                            {lookupProfile.name || `@${quickHandle}`}
+                          </span>
+                          {lookupProfile.isVerified && (
+                            <span className="text-xs text-blue-600">✓ verified</span>
+                          )}
+                        </div>
+                        {lookupProfile.category && (
+                          <p className="text-xs text-gray-500 truncate">
+                            {lookupProfile.category}
+                          </p>
+                        )}
+                      </div>
+                      {lookupProfile.source && (
+                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-600">
+                          {lookupProfile.source}
+                        </span>
+                      )}
+                    </div>
+                    {lookupProfile.bio && (
+                      <p className="text-xs text-gray-600 line-clamp-2">
+                        {lookupProfile.bio}
+                      </p>
+                    )}
+                    <div className="grid grid-cols-2 gap-2 text-xs md:grid-cols-4">
+                      <Metric
+                        label="Followers"
+                        value={formatCount(lookupProfile.igFollowerCount)}
+                      />
+                      <Metric
+                        label="Following"
+                        value={formatCount(lookupProfile.igFollowingCount)}
+                      />
+                      <Metric
+                        label="Posts"
+                        value={formatCount(lookupProfile.igPostCount)}
+                      />
+                      <Metric
+                        label="Engagement"
+                        value={
+                          lookupProfile.igEngagementRate != null
+                            ? `${lookupProfile.igEngagementRate.toFixed(2)}%`
+                            : "—"
+                        }
+                      />
+                      <Metric
+                        label="Avg Likes"
+                        value={formatCount(lookupProfile.igAvgLikes)}
+                      />
+                      <Metric
+                        label="Avg Comments"
+                        value={formatCount(lookupProfile.igAvgComments)}
+                      />
+                      <Metric
+                        label="Avg Reel Views"
+                        value={formatCount(lookupProfile.igAvgReelViews)}
+                      />
+                      {lookupProfile.igAudienceTopAgeRange && (
+                        <Metric
+                          label="Top Age"
+                          value={lookupProfile.igAudienceTopAgeRange}
+                        />
+                      )}
+                    </div>
+                    {(lookupProfile.igAudienceMalePct != null ||
+                      lookupProfile.igAudienceFemalePct != null) && (
+                      <div className="text-xs text-gray-600">
+                        Audience: ♂{" "}
+                        {lookupProfile.igAudienceMalePct?.toFixed(0) ?? "—"}% · ♀{" "}
+                        {lookupProfile.igAudienceFemalePct?.toFixed(0) ?? "—"}%
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-3 text-xs">
+                  {quickAddress1.trim() &&
+                  quickCity.trim() &&
+                  quickPincode.trim() ? (
+                    <span className="inline-flex items-center gap-1 text-green-700">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Shipping address ready
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-yellow-700">
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                      Address + city + pincode required
+                    </span>
+                  )}
+                  {quickPhone.trim() ? (
+                    <span className="inline-flex items-center gap-1 text-green-700">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Phone ready
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-yellow-700">
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                      Phone required
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
 
             {isLoadingInfluencer && (
               <p className="text-sm text-gray-500">Loading influencer details...</p>
@@ -796,6 +1211,17 @@ export default function NewPrParcelPage() {
           </Link>
         </div>
       </form>
+    </div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded bg-gray-50 px-2 py-1">
+      <div className="text-[10px] uppercase tracking-wide text-gray-500">
+        {label}
+      </div>
+      <div className="text-sm font-semibold text-gray-900">{value || "—"}</div>
     </div>
   );
 }

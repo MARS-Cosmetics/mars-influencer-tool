@@ -1,76 +1,74 @@
 "use client";
 
-import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Bell,
-  Handshake,
-  CalendarClock,
-  DollarSign,
-  MessageSquare,
   CheckCheck,
+  Send,
+  Check,
+  X,
+  RotateCcw,
+  Handshake,
+  Lock,
 } from "lucide-react";
 
-interface Notification {
+export interface NotificationItem {
   id: string;
-  icon: React.ReactNode;
+  type: string;
   title: string;
-  description: string;
-  timestamp: string;
-  read: boolean;
+  body: string | null;
+  actionUrl: string;
+  readAt: string | null;
+  createdAt: string;
 }
 
-const initialNotifications: Notification[] = [
-  {
-    id: "1",
-    icon: <Handshake className="h-4 w-4 text-[#A6192E]" />,
-    title: "New collaboration request",
-    description: "Jade Morales wants to collaborate on the summer campaign.",
-    timestamp: "2 min ago",
-    read: false,
-  },
-  {
-    id: "2",
-    icon: <CalendarClock className="h-4 w-4 text-amber-500" />,
-    title: "Campaign deadline approaching",
-    description: 'The "Spring Launch" campaign is due in 3 days.',
-    timestamp: "1 hr ago",
-    read: false,
-  },
-  {
-    id: "3",
-    icon: <DollarSign className="h-4 w-4 text-emerald-500" />,
-    title: "Payment received",
-    description: "You received $2,400 for the Q1 deliverables.",
-    timestamp: "5 hrs ago",
-    read: true,
-  },
-  {
-    id: "4",
-    icon: <MessageSquare className="h-4 w-4 text-blue-500" />,
-    title: "New message from agency",
-    description: "Bright Talent Agency sent you a contract update.",
-    timestamp: "Yesterday",
-    read: true,
-  },
-];
+interface Props {
+  items: NotificationItem[];
+  unreadCount: number;
+  onMarkRead: (id: string) => Promise<void> | void;
+  onMarkAllRead: () => Promise<void> | void;
+}
 
-export function NotificationsPanel() {
-  const [notifications, setNotifications] =
-    useState<Notification[]>(initialNotifications);
-
-  const unreadCount = notifications.filter((n) => !n.read).length;
-
-  function markAllAsRead() {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+function iconFor(type: string) {
+  switch (type) {
+    case "proposal_submitted":
+      return <Send className="h-4 w-4 text-blue-600" />;
+    case "proposal_approved":
+      return <Check className="h-4 w-4 text-emerald-600" />;
+    case "proposal_rejected":
+      return <X className="h-4 w-4 text-red-600" />;
+    case "proposal_counter_offered":
+      return <RotateCcw className="h-4 w-4 text-orange-600" />;
+    case "proposal_accepted_by_influencer":
+      return <Handshake className="h-4 w-4 text-purple-600" />;
+    case "deal_locked":
+      return <Lock className="h-4 w-4 text-emerald-700" />;
+    default:
+      return <Bell className="h-4 w-4 text-zinc-500" />;
   }
+}
 
-  function markAsRead(id: string) {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
-    );
-  }
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const s = Math.floor(diff / 1000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
+}
 
-  if (notifications.length === 0) {
+export function NotificationsPanel({
+  items,
+  unreadCount,
+  onMarkRead,
+  onMarkAllRead,
+}: Props) {
+  const router = useRouter();
+
+  if (!items || items.length === 0) {
     return (
       <div className="flex w-[380px] flex-col items-center justify-center py-12">
         <Bell className="h-12 w-12 text-zinc-200" strokeWidth={1.5} />
@@ -78,19 +76,32 @@ export function NotificationsPanel() {
           No notifications yet
         </p>
         <p className="mt-1 text-xs text-zinc-300">
-          We&apos;ll notify you when something arrives
+          You&apos;ll be notified when proposals are submitted, reviewed, or
+          deals are locked.
         </p>
       </div>
     );
   }
 
+  async function handleClick(n: NotificationItem) {
+    if (!n.readAt) await onMarkRead(n.id);
+    router.push(n.actionUrl);
+  }
+
   return (
     <div className="w-[380px]">
-      <div className="flex items-center justify-between border-b border-zinc-100 px-3 pb-2">
-        <h3 className="text-sm font-semibold text-zinc-900">Notifications</h3>
+      <div className="flex items-center justify-between border-b border-zinc-100 px-3 pb-2 pt-3">
+        <h3 className="text-sm font-semibold text-zinc-900">
+          Notifications{" "}
+          {unreadCount > 0 && (
+            <span className="ml-1 rounded-full bg-[#A6192E] px-1.5 py-0.5 text-[10px] font-semibold text-white">
+              {unreadCount}
+            </span>
+          )}
+        </h3>
         {unreadCount > 0 && (
           <button
-            onClick={markAllAsRead}
+            onClick={() => onMarkAllRead()}
             className="flex items-center gap-1 text-xs text-[#A6192E] transition-colors hover:text-[#8a1526]"
           >
             <CheckCheck className="h-3 w-3" />
@@ -100,37 +111,39 @@ export function NotificationsPanel() {
       </div>
 
       <div className="max-h-[360px] overflow-y-auto">
-        {notifications.map((notification) => (
+        {items.map((n) => (
           <button
-            key={notification.id}
-            onClick={() => markAsRead(notification.id)}
+            key={n.id}
+            onClick={() => handleClick(n)}
             className={`flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors hover:bg-zinc-50 ${
-              !notification.read ? "bg-zinc-50/60" : ""
+              !n.readAt ? "bg-zinc-50/60" : ""
             }`}
           >
             <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-zinc-100">
-              {notification.icon}
+              {iconFor(n.type)}
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-start justify-between gap-2">
                 <p
                   className={`text-sm leading-snug ${
-                    !notification.read
+                    !n.readAt
                       ? "font-medium text-zinc-900"
                       : "text-zinc-700"
                   }`}
                 >
-                  {notification.title}
+                  {n.title}
                 </p>
-                {!notification.read && (
+                {!n.readAt && (
                   <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#A6192E]" />
                 )}
               </div>
-              <p className="mt-0.5 text-xs leading-relaxed text-zinc-500">
-                {notification.description}
-              </p>
+              {n.body && (
+                <p className="mt-0.5 text-xs leading-relaxed text-zinc-500 line-clamp-2">
+                  {n.body}
+                </p>
+              )}
               <p className="mt-1 text-[11px] text-zinc-400">
-                {notification.timestamp}
+                {relativeTime(n.createdAt)}
               </p>
             </div>
           </button>
@@ -138,10 +151,4 @@ export function NotificationsPanel() {
       </div>
     </div>
   );
-}
-
-export function useUnreadCount() {
-  // In a real app this would come from a shared store/context.
-  // For now, we return the initial unread count so the header badge works.
-  return initialNotifications.filter((n) => !n.read).length;
 }

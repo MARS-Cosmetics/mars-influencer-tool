@@ -21,6 +21,10 @@ const IG_POST_DATASET_ID = process.env.BRIGHTDATA_IG_POST_DATASET_ID;
 // Bright Data's IG datasets accept both /p/ and /reel/ URLs.
 const IG_REEL_DATASET_ID =
   process.env.BRIGHTDATA_IG_REEL_DATASET_ID || process.env.BRIGHTDATA_IG_POST_DATASET_ID;
+// Profile dataset (separate from post/reel). Returns followers, engagement,
+// bio, posts list, etc. Used as a fallback when CreatorX/Influenzer can't
+// answer for a handle.
+const IG_PROFILE_DATASET_ID = process.env.BRIGHTDATA_IG_PROFILE_DATASET_ID;
 
 // Instagram scrapes through /scrape can take 30s–3min on cold cache.
 // Set fetch timeout generously; the route layer can cap its own deadline.
@@ -296,4 +300,153 @@ export async function fetchInstagramPostMetrics(
     throw new BrightDataError(`Bright Data error for this URL: ${errMsg}`, 502);
   }
   return normalize(first, kind);
+}
+
+// ============================================================
+// Instagram Profile fetch — fallback for CreatorX / Influenzer.ai
+// ============================================================
+//
+// Returns null on configuration miss or when the profile isn't returned.
+// Throws BrightDataError on auth / network / billing failures so the caller
+// can decide whether to surface or silently fall through.
+
+export interface BrightDataIgProfile {
+  // Subset of NormalizedProfile fields Bright Data can fill. Audience
+  // demographics / credibility are NOT in the basic IG profile dataset —
+  // those stay null and must come from CreatorX or a paid endpoint.
+  handle: string;
+  name: string | null;
+  bio: string | null;
+  profileImageUrl: string | null;
+  isVerified: boolean;
+  email: string | null;
+  category: string | null;
+  igFollowerCount: number | null;
+  igFollowingCount: number | null;
+  igPostCount: number | null;
+  igEngagementRate: number | null; // 0–100 percent (normalized)
+  igAvgLikes: number | null;
+  igAvgComments: number | null;
+  igAvgReelViews: number | null;
+  raw: Record<string, unknown>;
+}
+
+export function isBrightDataProfileConfigured(): boolean {
+  return Boolean(API_TOKEN && IG_PROFILE_DATASET_ID);
+}
+
+export async function fetchInstagramProfileFromBrightData(
+  handle: string,
+): Promise<BrightDataIgProfile | null> {
+  if (!isBrightDataProfileConfigured()) return null;
+  const username = handle.replace(/^@/, "").trim();
+  if (!username) return null;
+
+  const url = `https://www.instagram.com/${username}/`;
+  let rows: Record<string, unknown>[];
+  try {
+    rows = await scrapeSync(IG_PROFILE_DATASET_ID!, url);
+  } catch (e) {
+    // Surface auth / billing / network errors so the caller can decide.
+    // 404 / dead_page is handled below by checking the row content.
+    if (e instanceof BrightDataError) throw e;
+    throw new BrightDataError(
+      `Bright Data profile fetch failed: ${e instanceof Error ? e.message : String(e)}`,
+      502,
+    );
+  }
+
+  const first = rows[0];
+  if (!first || typeof first !== "object") return null;
+
+  // Some responses come back as { error, error_code, input } for dead /
+  // private / unknown handles. Treat those as not-found, not an error.
+  if (typeof first.error === "string" && first.followers == null) return null;
+
+  const followers = pickNumber(
+    first,
+    "followers",
+    "follower_count",
+    "followers_count",
+  );
+  const following = pickNumber(
+    first,
+    "following",
+    "following_count",
+    "followings",
+  );
+  const posts = pickNumber(first, "posts_count", "post_count", "posts");
+  const avgEngagementRaw = pickNumber(
+    first,
+    "avg_engagement",
+    "engagement_rate",
+    "engagementRate",
+  );
+  // avg_engagement comes as 0–1 fraction; convert to percent for consistency
+  // with how the rest of the app stores engagement rate.
+  const engagementRatePct =
+    avgEngagementRaw == null
+      ? null
+      : avgEngagementRaw <= 1
+        ? avgEngagementRaw * 100
+        : avgEngagementRaw;
+
+  // Compute avg likes / comments / reel views from the posts array if present.
+  let avgLikes: number | null = null;
+  let avgComments: number | null = null;
+  let avgReelViews: number | null = null;
+  const postsArr = Array.isArray(first.posts) ? first.posts : null;
+  if (postsArr && postsArr.length > 0) {
+    let lSum = 0;
+    let lCount = 0;
+    let cSum = 0;
+    let cCount = 0;
+    let vSum = 0;
+    let vCount = 0;
+    for (const p of postsArr) {
+      if (!p || typeof p !== "object") continue;
+      const post = p as Record<string, unknown>;
+      const lk = pickNumber(post, "likes", "like_count");
+      const cm = pickNumber(post, "comments", "num_comments", "comment_count");
+      const vw = pickNumber(post, "video_play_count", "video_view_count");
+      if (lk != null) {
+        lSum += lk;
+        lCount += 1;
+      }
+      if (cm != null) {
+        cSum += cm;
+        cCount += 1;
+      }
+      if (vw != null) {
+        vSum += vw;
+        vCount += 1;
+      }
+    }
+    if (lCount > 0) avgLikes = Math.round(lSum / lCount);
+    if (cCount > 0) avgComments = Math.round(cSum / cCount);
+    if (vCount > 0) avgReelViews = Math.round(vSum / vCount);
+  }
+
+  return {
+    handle: username,
+    name:
+      pickString(first, "full_name", "fullname", "name", "profile_name") ??
+      null,
+    bio: pickString(first, "biography", "bio") ?? null,
+    profileImageUrl:
+      pickString(first, "profile_image_link", "profile_picture", "picture") ??
+      null,
+    isVerified: typeof first.is_verified === "boolean" ? first.is_verified : Boolean(first.isVerified),
+    email: pickString(first, "email_address", "email") ?? null,
+    category:
+      pickString(first, "category_name", "business_category_name") ?? null,
+    igFollowerCount: followers,
+    igFollowingCount: following,
+    igPostCount: posts,
+    igEngagementRate: engagementRatePct,
+    igAvgLikes: avgLikes,
+    igAvgComments: avgComments,
+    igAvgReelViews: avgReelViews,
+    raw: first,
+  };
 }
