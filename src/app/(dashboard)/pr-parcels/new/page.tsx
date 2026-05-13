@@ -465,7 +465,30 @@ export default function NewPrParcelPage() {
         throw new Error(data.error || "Failed to create PR parcel");
       }
 
-      toast.success("PR Parcel created!");
+      const responseBody = await res.json().catch(() => ({}));
+      const shopify = responseBody?._shopify as
+        | { attempted: true; success: true; orderName: string }
+        | { attempted: true; success: false; error: string }
+        | { attempted: false; reason: string }
+        | undefined;
+
+      if (shopify?.attempted && shopify.success) {
+        toast.success(`PR Parcel created — Shopify order ${shopify.orderName} placed.`);
+      } else if (shopify?.attempted && !shopify.success) {
+        // Parcel exists in DB but Shopify side failed — surface the exact reason
+        // so the user isn't left guessing whether the order went through.
+        toast.error(
+          `PR Parcel created BUT Shopify order failed: ${shopify.error}`,
+          { duration: 10000 },
+        );
+      } else if (shopify && !shopify.attempted) {
+        toast.warning(
+          `PR Parcel created. Shopify order skipped — ${shopify.reason}`,
+          { duration: 8000 },
+        );
+      } else {
+        toast.success("PR Parcel created!");
+      }
       router.push("/pr-parcels");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to create PR parcel.");

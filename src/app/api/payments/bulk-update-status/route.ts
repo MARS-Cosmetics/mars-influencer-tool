@@ -4,14 +4,15 @@ import { prisma } from "@/lib/db";
 import { logActivity } from "@/lib/activity-log";
 import type { PaymentStatus } from "@/generated/prisma";
 
+// Finance flow uses only these 4 user-facing statuses (matches the UI
+// dropdown + the Excel export labels). The Prisma enum still has
+// processing/failed/cancelled for historical rows, but we don't let
+// anyone transition INTO those states via this endpoint.
 const ALLOWED_STATUSES: PaymentStatus[] = [
-  "pending",
-  "approved",
-  "processing",
-  "paid",
-  "failed",
-  "cancelled",
-  "invoice_issue",
+  "pending",         // Pending Approval
+  "approved",        // Approved for Payment
+  "invoice_issue",   // Invoice Issue
+  "paid",            // Payment Completed
 ];
 
 /**
@@ -72,17 +73,11 @@ export async function POST(request: Request) {
     },
   });
 
-  // Mirror to Asset.paymentStatus for the asset list views. Only mirror the
-  // statuses the asset-level enum understands (unpaid/pending/paid).
+  // Mirror to Asset.paymentStatus for the asset list views. Asset-level
+  // enum only has unpaid/pending/paid, so we collapse the 4 payment
+  // statuses: paid → paid, everything else (pending/approved/invoice_issue) → pending.
   if (collabIds.length > 0) {
-    const assetStatus =
-      status === "paid"
-        ? "paid"
-        : status === "pending" || status === "invoice_issue"
-          ? "pending"
-          : status === "approved" || status === "processing"
-            ? "pending"
-            : "unpaid";
+    const assetStatus = status === "paid" ? "paid" : "pending";
     await prisma.asset.updateMany({
       where: { collaborationId: { in: collabIds } },
       data: { paymentStatus: assetStatus },

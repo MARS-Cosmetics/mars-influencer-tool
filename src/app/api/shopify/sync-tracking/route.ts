@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { fetchOrdersByIds } from "@/lib/shopify";
+import { withRetry } from "@/lib/shopify-retry";
 
 export async function POST() {
   const syncLog = await prisma.syncLog.create({
@@ -43,7 +44,15 @@ export async function POST() {
       .map((c) => c.shopifyOrderId!)
       .filter(Boolean);
 
-    const orders = await fetchOrdersByIds(orderIds);
+    const fetchResult = await withRetry(() => fetchOrdersByIds(orderIds), {
+      maxRetries: 3,
+      baseDelayMs: 1000,
+    });
+    if (!fetchResult.success || !fetchResult.result) {
+      throw new Error(fetchResult.error || "fetchOrdersByIds failed");
+    }
+    const orders = fetchResult.result;
+    console.log(`[Shopify] sync-tracking: got ${orders.length} orders for ${orderIds.length} ids`);
 
     // Build a map for quick lookup
     const orderMap = new Map(orders.map((o) => [String(o.id), o]));

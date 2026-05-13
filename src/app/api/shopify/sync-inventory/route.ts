@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { fetchInventoryLevels } from "@/lib/shopify";
+import { withRetry } from "@/lib/shopify-retry";
 
 export async function POST() {
   const syncLog = await prisma.syncLog.create({
@@ -41,7 +42,15 @@ export async function POST() {
       parseInt(p.shopifyInventoryItemId!, 10)
     );
 
-    const levels = await fetchInventoryLevels(inventoryItemIds);
+    const fetchResult = await withRetry(() => fetchInventoryLevels(inventoryItemIds), {
+      maxRetries: 3,
+      baseDelayMs: 1000,
+    });
+    if (!fetchResult.success || !fetchResult.result) {
+      throw new Error(fetchResult.error || "fetchInventoryLevels failed");
+    }
+    const levels = fetchResult.result;
+    console.log(`[Shopify] sync-inventory: got ${levels.length} levels for ${inventoryItemIds.length} items`);
 
     // Build a map for quick lookup
     const levelMap = new Map(

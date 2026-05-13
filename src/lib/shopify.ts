@@ -49,19 +49,61 @@ function isMock(brandCreds?: ShopifyCredentials | null): boolean {
 // Generic Shopify API caller
 // ============================================================
 
+// Per-request timeout so the dev server never hangs forever on a stuck
+// Shopify call (the symptom users see: spinner that never resolves).
+const SHOPIFY_REQUEST_TIMEOUT_MS = 30_000;
+
+// Translate raw Shopify error bodies into actionable messages. The most
+// common cause of failures on a fresh custom app is missing Admin API
+// scopes — surface that explicitly instead of leaking JSON.
+function explainShopifyError(status: number, body: string, endpoint: string): string {
+  const lower = body.toLowerCase();
+  if (status === 401) {
+    return `Shopify 401 Unauthorized — access token is invalid, expired, or doesn't belong to this store. Reinstall the app on the store to get a fresh token.`;
+  }
+  if (status === 403 || lower.includes("requires merchant approval") || lower.includes("not approved")) {
+    const scopeHint =
+      endpoint.includes("/inventory_") ? "read_inventory, write_inventory" :
+      endpoint.includes("/orders") || endpoint.includes("/fulfillments") ? "read_orders, write_orders, read_fulfillments, write_fulfillments" :
+      endpoint.includes("/products") ? "read_products, write_products" :
+      "the relevant Admin API scope";
+    return `Shopify 403 Forbidden — the custom app is missing required scopes (${scopeHint}). Open the app config in Partners, add the scopes, then reinstall on the store.`;
+  }
+  if (status === 404) {
+    return `Shopify 404 — endpoint or resource not found at ${endpoint}. Likely the store URL is wrong or the resource was deleted.`;
+  }
+  if (status === 429) {
+    return `Shopify 429 Rate Limited — too many requests. Will retry automatically.`;
+  }
+  return `Shopify API error (${status}) on ${endpoint}: ${body.slice(0, 300)}`;
+}
+
 async function shopifyFetch<T>(endpoint: string, options?: RequestInit, brandCreds?: ShopifyCredentials | null): Promise<T> {
   const url = `${getBaseUrl(brandCreds)}${endpoint}`;
-  const res = await fetch(url, {
-    ...options,
-    headers: { ...getHeaders(brandCreds), ...options?.headers },
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), SHOPIFY_REQUEST_TIMEOUT_MS);
 
-  if (!res.ok) {
-    const error = await res.text();
-    throw new Error(`Shopify API error (${res.status}): ${error}`);
+  try {
+    const res = await fetch(url, {
+      ...options,
+      headers: { ...getHeaders(brandCreds), ...options?.headers },
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      const error = await res.text();
+      throw new Error(explainShopifyError(res.status, error, endpoint));
+    }
+
+    return res.json();
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error(`Shopify request timed out after ${SHOPIFY_REQUEST_TIMEOUT_MS}ms on ${endpoint}`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-
-  return res.json();
 }
 
 // ============================================================
@@ -100,17 +142,33 @@ export async function fetchAllProducts(brandCreds?: ShopifyCredentials | null): 
 
   const products: ShopifyProduct[] = [];
   let nextUrl: string | null = `${getBaseUrl(brandCreds)}/products.json?limit=250`;
+  let pageCount = 0;
 
   while (nextUrl) {
-    const res: Response = await fetch(nextUrl, { headers: getHeaders(brandCreds) });
+    pageCount++;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), SHOPIFY_REQUEST_TIMEOUT_MS);
+
+    let res: Response;
+    try {
+      res = await fetch(nextUrl, { headers: getHeaders(brandCreds), signal: controller.signal });
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        throw new Error(`Shopify products fetch timed out after ${SHOPIFY_REQUEST_TIMEOUT_MS}ms on page ${pageCount}`);
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
 
     if (!res.ok) {
       const error = await res.text();
-      throw new Error(`Shopify products fetch error (${res.status}): ${error}`);
+      throw new Error(explainShopifyError(res.status, error, "/products.json"));
     }
 
     const data = await res.json();
     products.push(...(data.products || []));
+    console.log(`[Shopify] products page ${pageCount}: fetched ${data.products?.length ?? 0} (total so far: ${products.length})`);
 
     // Shopify cursor pagination: use the full URL from Link header
     const linkHeader: string | null = res.headers.get("link");

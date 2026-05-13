@@ -108,10 +108,25 @@ export async function POST(request: Request) {
       );
     }
 
-    // Auto-create Shopify ₹1 order if products have shopifyVariantId
+    // Auto-create Shopify ₹1 order if products have shopifyVariantId.
+    // We track outcome so the API can surface failures to the client
+    // (parcel still gets created, but the UI shows a warning).
+    let shopifyOutcome:
+      | { attempted: true; success: true; orderName: string; orderId: string }
+      | { attempted: true; success: false; error: string }
+      | { attempted: false; reason: string } = { attempted: false, reason: "no eligible products" };
+
     const shopifyProducts = parcel.items.filter(
       (item) => item.product.shopifyVariantId || item.product.shopifyProductId
     );
+
+    if (shopifyProducts.length === 0) {
+      shopifyOutcome = { attempted: false, reason: "none of the selected products have a Shopify variant/product ID — sync products first" };
+    } else if (!parcel.influencer.addressLine1) {
+      shopifyOutcome = { attempted: false, reason: "influencer is missing addressLine1 — Shopify needs a shipping address" };
+    } else if (!parcel.influencer.phone) {
+      shopifyOutcome = { attempted: false, reason: "influencer is missing phone — Shopify requires it for shipping" };
+    }
 
     if (shopifyProducts.length > 0 && parcel.influencer.addressLine1 && parcel.influencer.phone) {
       try {
@@ -186,16 +201,29 @@ export async function POST(request: Request) {
           console.log(
             `[Shopify] PR Parcel order created: ${order.name} after ${orderResult.attempts} attempt(s)`
           );
+          shopifyOutcome = {
+            attempted: true,
+            success: true,
+            orderName: order.name,
+            orderId: String(order.id),
+          };
         } else {
           console.warn(
             `[Shopify] PR Parcel order creation failed after ${orderResult.attempts} attempts: ${orderResult.error}`
           );
+          shopifyOutcome = {
+            attempted: true,
+            success: false,
+            error: orderResult.error || `failed after ${orderResult.attempts} attempts`,
+          };
         }
       } catch (shopifyError) {
+        const msg = shopifyError instanceof Error ? shopifyError.message : String(shopifyError);
         console.error(
           "[Shopify] PR Parcel order creation failed (non-blocking):",
           shopifyError
         );
+        shopifyOutcome = { attempted: true, success: false, error: msg };
       }
     }
 
@@ -231,7 +259,7 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json(
-      { ...finalParcel, _po: generatedPo },
+      { ...finalParcel, _po: generatedPo, _shopify: shopifyOutcome },
       { status: 201 },
     );
   } catch (error) {

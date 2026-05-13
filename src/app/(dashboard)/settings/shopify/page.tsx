@@ -115,7 +115,7 @@ export default function ShopifySyncPage() {
   async function handleSync(type: "products" | "orders" | "inventory") {
     const endpoints: Record<string, string> = {
       products: "/api/shopify/sync-products",
-      orders: "/api/shopify/sync-orders",
+      orders: "/api/shopify/sync-tracking",
       inventory: "/api/shopify/sync-inventory",
     };
 
@@ -125,7 +125,11 @@ export default function ShopifySyncPage() {
       const contentType = res.headers.get("content-type") || "";
 
       if (!contentType.includes("application/json")) {
-        toast.error(`Sync failed: authentication error. Please refresh and try again.`);
+        const body = await res.text().catch(() => "");
+        const snippet = body.replace(/<[^>]+>/g, " ").trim().slice(0, 200);
+        toast.error(
+          `Sync failed (HTTP ${res.status}). ${snippet || "Non-JSON response from server."}`
+        );
         return;
       }
 
