@@ -1619,3 +1619,16 @@ model CollaborationProposal {
   @@index([status])
   @@map("collaboration_proposals")
 }
+
+// Generic key/value table for app-wide state.
+// Currently stores only "global_metrics_refresh" with value {at, byUserId}
+// representing the last time the dashboard's "Refresh metrics" button was
+// triggered. Used to enforce role-based cooldowns across all users.
+model AppSetting {
+  key       String   @id
+  value     Json
+  updatedBy String?  @map("updated_by")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("app_setting")
+}

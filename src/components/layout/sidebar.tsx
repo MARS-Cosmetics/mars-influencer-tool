@@ -26,6 +26,7 @@ import {
   Trophy,
   Search,
   UserCog,
+  BarChart3,
 } from "lucide-react";
 
 type NavItem = {
@@ -45,6 +46,7 @@ const navSections: NavSection[] = [
     label: "Overview",
     items: [
       { label: "Dashboard", href: "/", icon: LayoutDashboard },
+      { label: "Analytics", href: "/analytics", icon: BarChart3 },
       { label: "Leaderboard", href: "/leaderboard", icon: Trophy },
     ],
   },

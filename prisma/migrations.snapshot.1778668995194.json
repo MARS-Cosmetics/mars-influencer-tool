@@ -1,0 +1,92 @@
+[
+  {
+    "id": "0095a397-4abd-44ee-9b9c-c30bcaafd5fd",
+    "checksum": "7af77a5a09d6c60c1261c4f4c4318696e1732ee8dbdd8b722ea9f3d8d14cb19a",
+    "finished_at": "2026-04-23T12:48:02.466Z",
+    "migration_name": "20260324183141_init",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-04-23T12:47:50.734Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "5392aa82-6f18-47b0-be0c-7884497c431a",
+    "checksum": "34868cceacc64bb14726d5af7814fe7f38aebf6b632cd35cb8cace35968fe4c0",
+    "finished_at": "2026-05-07T12:41:10.320Z",
+    "migration_name": "20260507120000_add_influencer_ownership",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-05-07T12:41:09.555Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "fb8e0466-8484-40e2-8e95-0ab4d15feb57",
+    "checksum": "aedbc6c006801a69c83acc1e8901c2c2ddbfa24ea866c7a312405f763cc1f5f1",
+    "finished_at": "2026-05-08T06:17:30.995Z",
+    "migration_name": "20260508060000_add_gst_payable_amount",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-05-08T06:17:30.524Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "e3982b34-68aa-4918-b704-9aa2058ccda1",
+    "checksum": "0e7e0a098d364ae1cc97d76cb826a06eda9b8db87607479e2a12647ef996322b",
+    "finished_at": "2026-05-08T09:34:20.284Z",
+    "migration_name": "20260508120000_asset_payment_status",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-05-08T09:34:19.527Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "9f07bfbe-80c5-428d-bbb4-3885d1d127f5",
+    "checksum": "7c35218590c4f3e054b4a26e2d43ce2288b823b2e1e3c68e903e14110a8ca049",
+    "finished_at": "2026-05-08T11:02:48.981Z",
+    "migration_name": "20260508140000_purchase_orders",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-05-08T11:02:47.606Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "a89fe782-5c6e-44f6-824a-674dc31e1189",
+    "checksum": "7119c14c8dc7940289b4cf1347bb87a603ad02e4b021eb7ad3b09a887815abe0",
+    "finished_at": "2026-05-11T06:51:25.828Z",
+    "migration_name": "20260511120000_asset_brightdata_snapshot",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-05-11T06:51:25.322Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "3872f5b9-8f62-4053-b8cf-088460bbcd32",
+    "checksum": "ce10d880d8779df0f6ce10c4b859abb4a31b3618277f169de7d4b81c24f91944",
+    "finished_at": "2026-05-12T06:15:50.899Z",
+    "migration_name": "20260512100000_collaboration_proposals",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-05-12T06:15:50.046Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "1ba6606a-fd92-4dc9-ad39-b0dac1d2a516",
+    "checksum": "e12195984ba314ebacce330a23a4524fdb4dc2889629ec4f54f00390182dab6d",
+    "finished_at": "2026-05-12T06:51:16.382Z",
+    "migration_name": "20260512140000_notifications",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-05-12T06:51:15.741Z",
+    "applied_steps_count": 1
+  },
+  {
+    "id": "0ef9a3b9-4348-4bbd-9614-28479dc797b6",
+    "checksum": "bc9be958d6e5b18c1fe9fc3e08486d39e685c7e6f515ce5f0c6fb6af01a537be",
+    "finished_at": "2026-05-12T10:25:28.752Z",
+    "migration_name": "20260512170000_payment_invoice_issue_status",
+    "logs": null,
+    "rolled_back_at": null,
+    "started_at": "2026-05-12T10:25:28.284Z",
+    "applied_steps_count": 1
+  }
+]

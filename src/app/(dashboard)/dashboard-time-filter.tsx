@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +33,7 @@ function daysAgo(n: number): string {
 export function DashboardTimeFilter() {
   const router = useRouter();
   const params = useSearchParams();
+  const pathname = usePathname();
   const urlFrom = params.get("from") ?? daysAgo(30);
   const urlTo = params.get("to") ?? isoDate(new Date());
 
@@ -46,7 +47,7 @@ export function DashboardTimeFilter() {
     const next = new URLSearchParams(params.toString());
     next.set("from", daysAgo(days));
     next.set("to", isoDate(new Date()));
-    router.push(`/?${next.toString()}`);
+    router.push(`${pathname}?${next.toString()}`);
     setShowCustom(false);
   }
 
@@ -58,7 +59,7 @@ export function DashboardTimeFilter() {
     const next = new URLSearchParams(params.toString());
     next.set("from", nextFrom);
     next.set("to", nextTo);
-    router.push(`/?${next.toString()}`);
+    router.push(`${pathname}?${next.toString()}`);
   }
 
   // Highlight the active preset by comparing URL window length to preset days.

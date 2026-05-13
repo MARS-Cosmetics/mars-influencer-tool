@@ -20,6 +20,7 @@ import {
 import Link from "next/link";
 import { PendingWork } from "./pending-work";
 import { DashboardTimeFilter } from "./dashboard-time-filter";
+import { RefreshMetricsButton } from "@/components/refresh-metrics-button";
 
 async function getStats() {
   const [
@@ -327,7 +328,19 @@ export default async function DashboardPage(props: {
 
       {/* Time-scoped metrics */}
       <div className="space-y-4">
-        <DashboardTimeFilter />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <DashboardTimeFilter />
+          <div className="flex items-center gap-2">
+            <RefreshMetricsButton />
+            <Link
+              href={`/analytics?from=${searchParams.from ?? ""}&to=${searchParams.to ?? ""}`}
+              className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-50"
+            >
+              View breakdown
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+        </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {metricCards.map((card) => (
             <Card

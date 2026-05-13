@@ -19,6 +19,7 @@ import { InfluencerFilters } from "./influencer-filters";
 import { InfluencerTabs } from "./influencer-tabs";
 import { BulkImportDialog } from "./bulk-import-dialog";
 import { ExportMenu } from "./export-menu";
+import { InfluencerStatusSelect } from "./influencer-status-select";
 
 function formatCount(n: number | null | undefined): string {
   if (n == null) return "-";
@@ -33,18 +34,6 @@ const tierColors: Record<string, string> = {
   mid: "bg-green-100 text-green-700",
   macro: "bg-purple-100 text-purple-700",
   mega: "bg-red-100 text-red-700",
-};
-
-const statusColors: Record<string, string> = {
-  active: "bg-green-100 text-green-700",
-  discovered: "bg-gray-100 text-gray-700",
-  contacted: "bg-yellow-100 text-yellow-700",
-  form_submitted: "bg-orange-100 text-orange-700",
-  demographics_verified: "bg-cyan-100 text-cyan-700",
-  onboarded: "bg-blue-100 text-blue-700",
-  inactive: "bg-gray-200 text-gray-500",
-  blacklisted: "bg-red-100 text-red-700",
-  do_not_contact: "bg-red-200 text-red-800",
 };
 
 export default async function InfluencersPage({
@@ -232,12 +221,10 @@ export default async function InfluencersPage({
                       : "-"}
                   </TableCell>
                   <TableCell>
-                    <Badge
-                      className={statusColors[influencer.status] || ""}
-                      variant="secondary"
-                    >
-                      {influencer.status.replace(/_/g, " ")}
-                    </Badge>
+                    <InfluencerStatusSelect
+                      influencerId={influencer.id}
+                      currentStatus={influencer.status}
+                    />
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {influencer.city || "-"}

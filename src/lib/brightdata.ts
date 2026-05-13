@@ -92,7 +92,7 @@ function detectContentKind(url: string): IgContentKind | null {
 
 async function scrapeSync(
   datasetId: string,
-  url: string,
+  urls: string[],
 ): Promise<Record<string, unknown>[]> {
   const qs = new URLSearchParams({
     dataset_id: datasetId,
@@ -105,7 +105,7 @@ async function scrapeSync(
       Authorization: `Bearer ${API_TOKEN}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ input: [{ url }] }),
+    body: JSON.stringify({ input: urls.map((url) => ({ url })) }),
     signal: AbortSignal.timeout(SCRAPE_TIMEOUT_MS),
   });
   if (!res.ok) {
@@ -128,6 +128,34 @@ async function scrapeSync(
     return [body as Record<string, unknown>];
   }
   return [];
+}
+
+// Best-effort URL normalization for matching response rows back to the input
+// list. Strips trailing slash and lowercases host. Bright Data IG responses
+// typically echo the original URL, but minor differences (trailing /, www.)
+// occasionally appear.
+function normalizeUrl(u: string): string {
+  try {
+    const url = new URL(u);
+    const host = url.hostname.toLowerCase().replace(/^www\./, "");
+    const path = url.pathname.replace(/\/$/, "");
+    return `${url.protocol}//${host}${path}`;
+  } catch {
+    return u.trim().toLowerCase().replace(/\/$/, "");
+  }
+}
+
+function extractRowUrl(row: Record<string, unknown>): string | null {
+  // Direct fields
+  const direct = pickString(row, "url", "post_url", "input_url", "source_url");
+  if (direct) return direct;
+  // input: {url: ...} echoed back on error rows
+  const input = row.input;
+  if (input && typeof input === "object" && !Array.isArray(input)) {
+    const url = (input as Record<string, unknown>).url;
+    if (typeof url === "string") return url;
+  }
+  return null;
 }
 
 function pickNumber(obj: Record<string, unknown>, ...keys: string[]): number | null {
@@ -282,7 +310,7 @@ export async function fetchInstagramPostMetrics(
     );
   }
   const datasetId = kind === "reel" ? IG_REEL_DATASET_ID! : IG_POST_DATASET_ID!;
-  const rows = await scrapeSync(datasetId, contentUrl);
+  const rows = await scrapeSync(datasetId, [contentUrl]);
   const first = rows[0];
   if (!first || typeof first !== "object") {
     throw new BrightDataError("Bright Data returned an empty result for this URL", 502);
@@ -300,6 +328,147 @@ export async function fetchInstagramPostMetrics(
     throw new BrightDataError(`Bright Data error for this URL: ${errMsg}`, 502);
   }
   return normalize(first, kind);
+}
+
+// ============================================================
+// Batch fetch — multiple URLs in a single Bright Data /scrape call.
+// ============================================================
+//
+// Sends URLs grouped by dataset (post vs reel) in parallel. Returns a map
+// keyed by the ORIGINAL input URL with either the metrics or an Error. Never
+// throws — per-URL failures are surfaced as Error values in the map so the
+// caller can decide which assets to update vs leave untouched.
+
+export type BatchResult = { metrics: BrightDataMetrics } | { error: Error };
+
+export async function fetchInstagramPostMetricsBatch(
+  urls: string[],
+): Promise<Map<string, BatchResult>> {
+  const out = new Map<string, BatchResult>();
+
+  if (!isBrightDataConfigured()) {
+    const err = new BrightDataError(
+      "Bright Data not configured. Set BRIGHTDATA_API_TOKEN and BRIGHTDATA_IG_POST_DATASET_ID.",
+      503,
+    );
+    for (const u of urls) out.set(u, { error: err });
+    return out;
+  }
+
+  // Group URLs by dataset. Skip URLs we can't classify (non-IG, malformed).
+  const postUrls: string[] = [];
+  const reelUrls: string[] = [];
+  for (const u of urls) {
+    const kind = detectContentKind(u);
+    if (kind === "post") postUrls.push(u);
+    else if (kind === "reel") reelUrls.push(u);
+    else {
+      out.set(u, {
+        error: new BrightDataError(
+          "URL is not a recognized Instagram post or reel URL",
+          400,
+        ),
+      });
+    }
+  }
+
+  const groups: { kind: IgContentKind; datasetId: string; urls: string[] }[] = [];
+  if (postUrls.length > 0) {
+    groups.push({ kind: "post", datasetId: IG_POST_DATASET_ID!, urls: postUrls });
+  }
+  if (reelUrls.length > 0) {
+    // If reel and post share the same dataset, the post-group call already
+    // handles both. Otherwise issue a separate call.
+    if (IG_REEL_DATASET_ID === IG_POST_DATASET_ID && postUrls.length > 0) {
+      // Merge reels into the post call so we only make one HTTP request.
+      groups[0].urls.push(...reelUrls);
+    } else {
+      groups.push({
+        kind: "reel",
+        datasetId: IG_REEL_DATASET_ID!,
+        urls: reelUrls,
+      });
+    }
+  }
+
+  // Run groups in parallel. Each group is one /scrape call.
+  await Promise.all(
+    groups.map(async (g) => {
+      let rows: Record<string, unknown>[];
+      try {
+        rows = await scrapeSync(g.datasetId, g.urls);
+      } catch (e) {
+        const err =
+          e instanceof Error
+            ? e
+            : new BrightDataError(`Bright Data scrape failed: ${String(e)}`, 502);
+        for (const u of g.urls) out.set(u, { error: err });
+        return;
+      }
+
+      // Match rows back to input URLs by their echoed URL field. Fall back
+      // to position if URL match fails (some datasets may not echo URL on
+      // every row).
+      const inputByNorm = new Map<string, string>();
+      for (const u of g.urls) inputByNorm.set(normalizeUrl(u), u);
+
+      const matched = new Set<string>();
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || typeof row !== "object") continue;
+        const rowUrl = extractRowUrl(row);
+        let inputUrl: string | null = null;
+        if (rowUrl) {
+          const norm = normalizeUrl(rowUrl);
+          inputUrl = inputByNorm.get(norm) ?? null;
+        }
+        // Positional fallback — only safe if no URL match AND the row index
+        // hasn't already been consumed by a URL-matched assignment. Best
+        // effort.
+        if (!inputUrl && i < g.urls.length && !matched.has(g.urls[i])) {
+          inputUrl = g.urls[i];
+        }
+        if (!inputUrl) continue;
+        matched.add(inputUrl);
+
+        // Detect error rows for this input.
+        const errMsg =
+          typeof (row as { error?: unknown }).error === "string"
+            ? ((row as { error?: string }).error as string)
+            : typeof (row as { warning?: unknown }).warning === "string"
+              ? ((row as { warning?: string }).warning as string)
+              : null;
+        const hasNumericMetric =
+          pickNumber(row, "likes", "likes_count", "views", "video_view_count") !==
+          null;
+        if (errMsg && !hasNumericMetric) {
+          out.set(inputUrl, {
+            error: new BrightDataError(
+              `Bright Data error for this URL: ${errMsg}`,
+              502,
+            ),
+          });
+          continue;
+        }
+        out.set(inputUrl, { metrics: normalize(row, g.kind) });
+      }
+
+      // Any input URL not matched at all → record as not-returned error so
+      // the caller knows it didn't get refreshed.
+      for (const u of g.urls) {
+        if (!out.has(u)) {
+          out.set(u, {
+            error: new BrightDataError(
+              "Bright Data did not return a result for this URL",
+              502,
+            ),
+          });
+        }
+      }
+    }),
+  );
+
+  return out;
 }
 
 // ============================================================
@@ -345,7 +514,7 @@ export async function fetchInstagramProfileFromBrightData(
   const url = `https://www.instagram.com/${username}/`;
   let rows: Record<string, unknown>[];
   try {
-    rows = await scrapeSync(IG_PROFILE_DATASET_ID!, url);
+    rows = await scrapeSync(IG_PROFILE_DATASET_ID!, [url]);
   } catch (e) {
     // Surface auth / billing / network errors so the caller can decide.
     // 404 / dead_page is handled below by checking the row content.
