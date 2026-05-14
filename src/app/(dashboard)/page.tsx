@@ -21,8 +21,26 @@ import Link from "next/link";
 import { PendingWork } from "./pending-work";
 import { DashboardTimeFilter } from "./dashboard-time-filter";
 import { RefreshMetricsButton } from "@/components/refresh-metrics-button";
+import { auth } from "@/lib/auth";
+import {
+  buildAssetScopeWhere,
+  buildCampaignScopeWhere,
+  buildCollaborationScopeWhere,
+  buildInfluencerScopeWhere,
+  buildPaymentScopeWhere,
+  buildPrParcelScopeWhere,
+} from "@/lib/asset-scope";
 
-async function getStats() {
+type Scope = { userId: string | null; role: string | null | undefined };
+
+async function getStats(scope: Scope) {
+  const influencerWhere = buildInfluencerScopeWhere(scope.userId, scope.role);
+  const collabWhere = buildCollaborationScopeWhere(scope.userId, scope.role);
+  const campaignWhere = buildCampaignScopeWhere(scope.userId, scope.role);
+  const paymentWhere = buildPaymentScopeWhere(scope.userId, scope.role);
+  const parcelWhere = buildPrParcelScopeWhere(scope.userId, scope.role);
+  const assetWhere = buildAssetScopeWhere(scope.userId, scope.role);
+
   const [
     influencerCount,
     activeCollabCount,
@@ -34,19 +52,34 @@ async function getStats() {
     completedCollabs,
   ] = await Promise.all([
     prisma.influencer.count({
-      where: { status: { in: ["active", "onboarded"] } },
+      where: {
+        AND: [influencerWhere, { status: { in: ["active", "onboarded"] } }],
+      },
     }),
     prisma.collaboration.count({
-      where: { status: { notIn: ["completed", "cancelled"] } },
+      where: {
+        AND: [collabWhere, { status: { notIn: ["completed", "cancelled"] } }],
+      },
     }),
-    prisma.campaign.count({ where: { status: "active" } }),
-    prisma.payment.count({ where: { status: "pending" } }),
+    prisma.campaign.count({
+      where: { AND: [campaignWhere, { status: "active" }] },
+    }),
+    prisma.payment.count({
+      where: { AND: [paymentWhere, { status: "pending" }] },
+    }),
     prisma.prParcel.count({
-      where: { status: { in: ["preparing", "shipped", "in_transit"] } },
+      where: {
+        AND: [
+          parcelWhere,
+          { status: { in: ["preparing", "shipped", "in_transit"] } },
+        ],
+      },
     }),
-    prisma.asset.count(),
-    prisma.influencer.count(),
-    prisma.collaboration.count({ where: { status: "completed" } }),
+    prisma.asset.count({ where: assetWhere }),
+    prisma.influencer.count({ where: influencerWhere }),
+    prisma.collaboration.count({
+      where: { AND: [collabWhere, { status: "completed" }] },
+    }),
   ]);
 
   return {
@@ -61,8 +94,9 @@ async function getStats() {
   };
 }
 
-async function getRecentCollabs() {
+async function getRecentCollabs(scope: Scope) {
   return prisma.collaboration.findMany({
+    where: buildCollaborationScopeWhere(scope.userId, scope.role),
     take: 5,
     orderBy: { createdAt: "desc" },
     include: {
@@ -81,9 +115,10 @@ async function getRecentCollabs() {
  * artifacts and CPV stays apples-to-apples. Barter collabs contribute views
  * but ₹0 spend (CPV math skips them).
  */
-async function getTimedMetrics(from: Date, to: Date) {
+async function getTimedMetrics(from: Date, to: Date, scope: Scope) {
   const assets = await prisma.asset.findMany({
     where: {
+      ...buildAssetScopeWhere(scope.userId, scope.role),
       publishedAt: { gte: from, lte: to },
     },
     select: {
@@ -191,11 +226,19 @@ export default async function DashboardPage(props: {
   searchParams: Promise<{ from?: string; to?: string }>;
 }) {
   const searchParams = await props.searchParams;
+  const session = await auth();
+  const sessionUser = session?.user as
+    | { id?: string; role?: string }
+    | undefined;
+  const scope: Scope = {
+    userId: sessionUser?.id ?? null,
+    role: sessionUser?.role ?? null,
+  };
   const { from, to } = parseRange(searchParams);
   const [stats, recentCollabs, timed] = await Promise.all([
-    getStats(),
-    getRecentCollabs(),
-    getTimedMetrics(from, to),
+    getStats(scope),
+    getRecentCollabs(scope),
+    getTimedMetrics(from, to, scope),
   ]);
 
   const metricCards = [

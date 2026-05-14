@@ -6,6 +6,7 @@ import {
   isBrightDataConfigured,
   BrightDataError,
 } from "@/lib/brightdata";
+import { userCanRefreshAsset } from "@/lib/asset-scope";
 
 /**
  * Refresh the per-post metrics (views / likes / comments / shares) for an
@@ -35,6 +36,17 @@ export async function POST(
   }
 
   const { id } = await props.params;
+
+  // Authorization: admins refresh anything; everyone else only assets where
+  // they own the influencer or are assigned to the collab.
+  const role = (session.user as { role?: string }).role;
+  const allowed = await userCanRefreshAsset(prisma, id, session.user.id, role);
+  if (!allowed) {
+    return NextResponse.json(
+      { error: "You do not have permission to refresh this asset" },
+      { status: 403 },
+    );
+  }
 
   const asset = await prisma.asset.findUnique({
     where: { id },

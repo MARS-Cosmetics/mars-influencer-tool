@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic";
 
+import { auth } from "@/lib/auth";
 import { DashboardTimeFilter } from "../dashboard-time-filter";
 import { getAnalyticsBreakdown } from "@/lib/analytics";
 import { BreakdownTable } from "./breakdown-table";
@@ -28,8 +29,16 @@ export default async function AnalyticsPage(props: {
   searchParams: Promise<{ from?: string; to?: string }>;
 }) {
   const searchParams = await props.searchParams;
+  const session = await auth();
+  const sessionUser = session?.user as
+    | { id?: string; role?: string }
+    | undefined;
   const { from, to } = parseRange(searchParams);
-  const data = await getAnalyticsBreakdown(from, to);
+  const data = await getAnalyticsBreakdown(from, to, {
+    userId: sessionUser?.id ?? null,
+    role: sessionUser?.role ?? null,
+  });
+  const isAdmin = sessionUser?.role === "admin";
 
   return (
     <div className="space-y-10">
@@ -41,7 +50,9 @@ export default async function AnalyticsPage(props: {
           Analytics
         </h1>
         <p className="mt-1 text-sm text-zinc-500">
-          Plain-English breakdown of how your influencer content performed in this window.
+          {isAdmin
+            ? "Plain-English breakdown of how all influencer content performed in this window."
+            : "Plain-English breakdown of how your assigned influencer content performed in this window. (Admins see everything.)"}
         </p>
       </div>
 

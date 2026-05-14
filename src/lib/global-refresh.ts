@@ -60,7 +60,10 @@ export async function getLastGlobalRefresh(): Promise<GlobalRefreshRecord | null
 export async function tryClaimGlobalRefresh(
   role: string,
   byUserId: string,
-): Promise<{ claimed: true; record: GlobalRefreshRecord } | { claimed: false; existing: GlobalRefreshRecord }> {
+): Promise<
+  | { claimed: true; record: GlobalRefreshRecord; previous: GlobalRefreshRecord | null }
+  | { claimed: false; existing: GlobalRefreshRecord }
+> {
   const cooldownMs = cooldownMsForRole(role);
   return prisma.$transaction(async (tx) => {
     const existing = await tx.appSetting.findUnique({
@@ -68,21 +71,22 @@ export async function tryClaimGlobalRefresh(
     });
     const now = new Date();
     const existingAt = parseAt(existing?.value);
+    let previous: GlobalRefreshRecord | null = null;
+    if (existing && existingAt) {
+      const v = existing.value as Record<string, unknown>;
+      previous = {
+        at: existingAt.toISOString(),
+        byUserId: typeof v.byUserId === "string" ? v.byUserId : "",
+        byUserRole: typeof v.byUserRole === "string" ? v.byUserRole : "",
+      };
+    }
     if (existingAt) {
       const age = now.getTime() - existingAt.getTime();
       // Compare against the cooldown for THIS user's role. Admin can claim
       // even if last refresh was a regular user's. User cannot claim if
-      // last was an admin within 6h. This matches the user's spec.
+      // last was an admin within 6h.
       if (age < cooldownMs) {
-        const v = existing!.value as Record<string, unknown>;
-        return {
-          claimed: false as const,
-          existing: {
-            at: existingAt.toISOString(),
-            byUserId: typeof v.byUserId === "string" ? v.byUserId : "",
-            byUserRole: typeof v.byUserRole === "string" ? v.byUserRole : "",
-          },
-        };
+        return { claimed: false as const, existing: previous! };
       }
     }
     const record: GlobalRefreshRecord = {
@@ -102,8 +106,29 @@ export async function tryClaimGlobalRefresh(
         updatedBy: byUserId,
       },
     });
-    return { claimed: true as const, record };
+    return { claimed: true as const, record, previous };
   });
+}
+
+// Restore the AppSetting row to its prior state. Called when a fresh claim
+// produced zero successful refreshes — undoes the cooldown so the user can
+// retry immediately instead of waiting 30 min / 6h for nothing.
+export async function revertGlobalRefresh(
+  previous: GlobalRefreshRecord | null,
+): Promise<void> {
+  if (previous) {
+    await prisma.appSetting.update({
+      where: { key: GLOBAL_REFRESH_SETTING_KEY },
+      data: { value: previous as unknown as object },
+    });
+  } else {
+    // No prior record → delete the row so the next claim acts as first-ever.
+    await prisma.appSetting
+      .delete({ where: { key: GLOBAL_REFRESH_SETTING_KEY } })
+      .catch(() => {
+        // Row may have been deleted concurrently — that's fine, silently swallow.
+      });
+  }
 }
 
 function parseAt(value: unknown): Date | null {

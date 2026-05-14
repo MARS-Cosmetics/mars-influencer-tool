@@ -2,7 +2,16 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronRight, ChevronDown, ExternalLink, Flame } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import {
+  ChevronRight,
+  ChevronDown,
+  ExternalLink,
+  Flame,
+  RefreshCw,
+  Loader2,
+} from "lucide-react";
 import type { AssetRow, InfluencerRow, Totals } from "@/lib/analytics";
 import { formatCompactInt, formatInr, formatCpv } from "./format";
 
@@ -335,6 +344,10 @@ function FragmentRow({
                               <ExternalLink className="h-3 w-3" />
                             </a>
                           )}
+                          <SingleAssetRefresh
+                            assetId={a.id}
+                            disabled={!a.contentUrl || a.platform !== "instagram"}
+                          />
                         </div>
                       </td>
                       <td className="px-2 py-1.5 text-xs text-zinc-500">
@@ -414,4 +427,79 @@ function sortVal(r: InfluencerRow, key: SortKey): number | null {
     case "assets":
       return r.assetCount;
   }
+}
+
+// Per-asset refresh. Bypasses the global cooldown intentionally — these are
+// one-off "I need fresh data on THIS asset right now" actions, distinct from
+// the dashboard's bulk refresh button.
+function SingleAssetRefresh({
+  assetId,
+  disabled,
+}: {
+  assetId: string;
+  disabled?: boolean;
+}) {
+  const [state, setState] = useState<"idle" | "loading" | "done" | "error">(
+    "idle",
+  );
+  const router = useRouter();
+
+  async function handleClick(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (state === "loading" || disabled) return;
+    setState("loading");
+    try {
+      const res = await fetch(`/api/assets/${assetId}/refresh-brightdata`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        toast.error(data.error || `Refresh failed (${res.status})`);
+        setState("error");
+        // Reset after 3s so the user can retry.
+        setTimeout(() => setState("idle"), 3000);
+        return;
+      }
+      toast.success("Asset refreshed");
+      setState("done");
+      router.refresh();
+      setTimeout(() => setState("idle"), 2000);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Refresh failed");
+      setState("error");
+      setTimeout(() => setState("idle"), 3000);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={disabled || state === "loading"}
+      title={
+        disabled
+          ? "Refresh available for Instagram assets with a content URL"
+          : state === "loading"
+            ? "Refreshing… can take up to 3 minutes"
+            : "Refresh this asset's metrics"
+      }
+      className={`inline-flex h-5 w-5 items-center justify-center rounded transition-colors ${
+        disabled
+          ? "cursor-not-allowed text-zinc-200"
+          : state === "loading"
+            ? "cursor-wait text-blue-500"
+            : state === "done"
+              ? "text-emerald-500"
+              : state === "error"
+                ? "text-red-500"
+                : "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
+      }`}
+    >
+      {state === "loading" ? (
+        <Loader2 className="h-3 w-3 animate-spin" />
+      ) : (
+        <RefreshCw className="h-3 w-3" />
+      )}
+    </button>
+  );
 }

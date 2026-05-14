@@ -6,6 +6,7 @@ import {
   computeCooldownState,
   MAX_ASSET_AGE_DAYS,
 } from "@/lib/global-refresh";
+import { buildAssetScopeWhere } from "@/lib/asset-scope";
 
 // Returns the list of Instagram asset IDs to refresh on a "Refresh metrics"
 // click. Global scope: every IG asset with a contentUrl (not window-scoped).
@@ -50,7 +51,9 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const limit = clampInt(url.searchParams.get("limit"), DEFAULT_LIMIT, 1, MAX_LIMIT);
 
+  const scopeWhere = buildAssetScopeWhere(session.user.id, role);
   const where: Record<string, unknown> = {
+    ...scopeWhere,
     platform: "instagram",
     contentUrl: { not: null },
   };

@@ -116,18 +116,109 @@ async function scrapeSync(
       text.slice(0, 500),
     );
   }
-  const body = (await res.json()) as unknown;
-  // /scrape returns the raw rows directly. Some Bright Data endpoints wrap
-  // the rows in an object — handle both just in case.
-  if (Array.isArray(body)) return body as Record<string, unknown>[];
-  if (body && typeof body === "object") {
-    const wrapped = body as { data?: unknown; results?: unknown };
-    if (Array.isArray(wrapped.data)) return wrapped.data as Record<string, unknown>[];
-    if (Array.isArray(wrapped.results)) return wrapped.results as Record<string, unknown>[];
-    // Single record returned as an object
-    return [body as Record<string, unknown>];
+  // Bright Data /scrape returns NDJSON (one JSON object per line) when the
+  // request has multiple inputs. For a single input it sometimes returns one
+  // bare object — both formats must work. Read as text and parse line-by-line
+  // when the whole-body JSON.parse fails.
+  const text = await res.text();
+  return parseBrightDataResponse(text);
+}
+
+function parseBrightDataResponse(text: string): Record<string, unknown>[] {
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+
+  // Happy path: single JSON value (array, object, or {data: [...]} wrapper).
+  try {
+    const body = JSON.parse(trimmed) as unknown;
+    if (Array.isArray(body)) return body as Record<string, unknown>[];
+    if (body && typeof body === "object") {
+      const wrapped = body as { data?: unknown; results?: unknown };
+      if (Array.isArray(wrapped.data)) return wrapped.data as Record<string, unknown>[];
+      if (Array.isArray(wrapped.results)) return wrapped.results as Record<string, unknown>[];
+      return [body as Record<string, unknown>];
+    }
+    return [];
+  } catch {
+    // Fall through to NDJSON parsing below.
   }
-  return [];
+
+  // NDJSON: one JSON object per line. Lines may be split by \n, \r\n, or even
+  // a sequence of multiple objects with no separators (rare but seen). We
+  // walk the string with JSON.parse's reviver-less behavior to extract
+  // sequential JSON values robustly.
+  const rows: Record<string, unknown>[] = [];
+
+  // Fast path: split on newlines first.
+  const lines = trimmed.split(/\r?\n/).filter((l) => l.trim().length > 0);
+  let lineParseFailed = false;
+  for (const line of lines) {
+    try {
+      const obj = JSON.parse(line.trim()) as Record<string, unknown>;
+      if (obj && typeof obj === "object") rows.push(obj);
+    } catch {
+      lineParseFailed = true;
+      break;
+    }
+  }
+  if (!lineParseFailed && rows.length > 0) return rows;
+
+  // Last-ditch: walk the raw text and decode sequential JSON values without
+  // requiring newline separators. Handles concatenated JSON objects.
+  rows.length = 0;
+  let i = 0;
+  while (i < trimmed.length) {
+    // Skip whitespace/separators
+    while (i < trimmed.length && /\s/.test(trimmed[i])) i++;
+    if (i >= trimmed.length) break;
+    // Walk a balanced JSON value starting at trimmed[i]. Only handles objects
+    // (`{`) and arrays (`[`); anything else means malformed input.
+    const start = i;
+    const opener = trimmed[i];
+    if (opener !== "{" && opener !== "[") break;
+    let depth = 0;
+    let inString = false;
+    let escape = false;
+    for (; i < trimmed.length; i++) {
+      const ch = trimmed[i];
+      if (escape) {
+        escape = false;
+        continue;
+      }
+      if (ch === "\\") {
+        escape = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = !inString;
+        continue;
+      }
+      if (inString) continue;
+      if (ch === "{" || ch === "[") depth++;
+      else if (ch === "}" || ch === "]") {
+        depth--;
+        if (depth === 0) {
+          i++;
+          break;
+        }
+      }
+    }
+    if (depth !== 0) break;
+    const chunk = trimmed.slice(start, i);
+    try {
+      const parsed = JSON.parse(chunk) as unknown;
+      if (Array.isArray(parsed)) {
+        for (const item of parsed as Record<string, unknown>[]) {
+          if (item && typeof item === "object") rows.push(item);
+        }
+      } else if (parsed && typeof parsed === "object") {
+        rows.push(parsed as Record<string, unknown>);
+      }
+    } catch {
+      break;
+    }
+  }
+  return rows;
 }
 
 // Best-effort URL normalization for matching response rows back to the input

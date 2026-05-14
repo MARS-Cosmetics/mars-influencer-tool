@@ -49,6 +49,14 @@ type BatchResult = {
   updated: { id: string }[];
   failed: { id: string; reason: string }[];
   skipped: { id: string; reason: string }[];
+  cycleReverted?: boolean;
+};
+
+type RunResults = {
+  updated: number;
+  failed: number;
+  skipped: number;
+  failedIds: string[];
 };
 
 type Phase = "idle" | "loading-candidates" | "confirm" | "running" | "done" | "error";
@@ -61,11 +69,9 @@ export function RefreshMetricsButton() {
   const [cooldown, setCooldown] = useState<CooldownResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
-  const [results, setResults] = useState<{
-    updated: number;
-    failed: number;
-    skipped: number;
-  } | null>(null);
+  const [results, setResults] = useState<RunResults | null>(null);
+  const [retrying, setRetrying] = useState(false);
+  const [retryProgress, setRetryProgress] = useState({ done: 0, total: 0 });
   const cancelRef = useRef(false);
 
   const fetchStatus = useCallback(async () => {
@@ -147,6 +153,8 @@ export function RefreshMetricsButton() {
     let skipped = 0;
     let cursor = 0;
     let externallyCooledDown = false;
+    let cooldownWasReset = false;
+    const failedIds: string[] = [];
 
     async function worker() {
       while (cursor < chunks.length && !cancelRef.current) {
@@ -163,18 +171,23 @@ export function RefreshMetricsButton() {
             externallyCooledDown = true;
             cancelRef.current = true;
             failed += chunk.length;
+            failedIds.push(...chunk);
             break;
           }
           if (!res.ok) {
             failed += chunk.length;
+            failedIds.push(...chunk);
           } else {
             const data = (await res.json()) as BatchResult;
             updated += data.updated.length;
             failed += data.failed.length;
             skipped += data.skipped.length;
+            for (const f of data.failed) failedIds.push(f.id);
+            if (data.cycleReverted) cooldownWasReset = true;
           }
         } catch {
           failed += chunk.length;
+          failedIds.push(...chunk);
         } finally {
           setProgress((p) => ({ ...p, done: p.done + chunk.length }));
         }
@@ -185,13 +198,71 @@ export function RefreshMetricsButton() {
       Array.from({ length: Math.min(PARALLEL_CHUNKS, chunks.length) }, () => worker()),
     );
 
-    setResults({ updated, failed, skipped });
+    setResults({ updated, failed, skipped, failedIds });
     setPhase("done");
     router.refresh();
     fetchStatus();
     if (externallyCooledDown) {
       setError("Cooldown engaged mid-run — remaining assets were not refreshed.");
+    } else if (cooldownWasReset && updated === 0) {
+      setError(
+        "Refresh failed — Bright Data didn't return any data. The cooldown has been reset so you can try again immediately.",
+      );
     }
+  }
+
+  // Retry only the failed ones, using the SINGLE-asset endpoint so we bypass
+  // the global cooldown lock. Each asset = one Bright Data call. Limited
+  // concurrency so we don't hammer their API.
+  async function retryFailed() {
+    if (!results || results.failedIds.length === 0) return;
+    const ids = [...results.failedIds];
+    setRetrying(true);
+    setRetryProgress({ done: 0, total: ids.length });
+
+    let retried = 0;
+    let stillFailed = 0;
+    const stillFailedIds: string[] = [];
+    let cursor = 0;
+    const CONCURRENCY = 3;
+
+    async function worker() {
+      while (cursor < ids.length) {
+        const i = cursor++;
+        const id = ids[i];
+        try {
+          const res = await fetch(`/api/assets/${id}/refresh-brightdata`, {
+            method: "POST",
+          });
+          if (res.ok) {
+            retried++;
+          } else {
+            stillFailed++;
+            stillFailedIds.push(id);
+          }
+        } catch {
+          stillFailed++;
+          stillFailedIds.push(id);
+        } finally {
+          setRetryProgress((p) => ({ ...p, done: p.done + 1 }));
+        }
+      }
+    }
+
+    await Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY, ids.length) }, () => worker()),
+    );
+
+    setRetrying(false);
+    setResults({
+      updated: (results.updated ?? 0) + retried,
+      failed: stillFailed,
+      skipped: results.skipped,
+      failedIds: stillFailedIds,
+    });
+    setError(null);
+    router.refresh();
+    fetchStatus();
   }
 
   // ------ Render ------
@@ -266,6 +337,9 @@ export function RefreshMetricsButton() {
             <DoneState
               results={results}
               hint={error}
+              retrying={retrying}
+              retryProgress={retryProgress}
+              onRetryFailed={retryFailed}
               onClose={close}
             />
           )}
@@ -485,12 +559,19 @@ function RunningState({
 function DoneState({
   results,
   hint,
+  retrying,
+  retryProgress,
+  onRetryFailed,
   onClose,
 }: {
-  results: { updated: number; failed: number; skipped: number };
+  results: RunResults;
   hint: string | null;
+  retrying: boolean;
+  retryProgress: { done: number; total: number };
+  onRetryFailed: () => void;
   onClose: () => void;
 }) {
+  const canRetry = results.failedIds.length > 0 && !retrying;
   return (
     <div className="mt-3 space-y-3">
       <div className="flex items-center gap-2 text-sm text-zinc-800">
@@ -520,8 +601,38 @@ function DoneState({
         )}
       </div>
       {hint && <p className="text-[11px] text-amber-700">{hint}</p>}
-      <div className="mt-3 flex justify-end">
-        <Button size="sm" onClick={onClose}>
+
+      {retrying && (
+        <div className="space-y-2">
+          <p className="text-xs text-zinc-600">
+            Retrying {retryProgress.done} / {retryProgress.total} one-by-one…
+          </p>
+          <div className="h-1.5 overflow-hidden rounded-full bg-zinc-100">
+            <div
+              className="h-full bg-[#A6192E] transition-all"
+              style={{
+                width: `${retryProgress.total > 0 ? Math.round((retryProgress.done / retryProgress.total) * 100) : 0}%`,
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="mt-3 flex justify-end gap-2">
+        {canRetry && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onRetryFailed}
+            className="gap-1.5"
+          >
+            <Loader2
+              className={`h-3.5 w-3.5 ${retrying ? "animate-spin" : "hidden"}`}
+            />
+            Retry {results.failedIds.length} failed
+          </Button>
+        )}
+        <Button size="sm" onClick={onClose} disabled={retrying}>
           Done
         </Button>
       </div>

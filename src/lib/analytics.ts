@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { buildAssetScopeWhere } from "@/lib/asset-scope";
 
 export type AssetRow = {
   id: string;
@@ -113,16 +114,24 @@ function humanLabel(key: string): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+export type AnalyticsScope = {
+  userId: string | null;
+  role: string | null | undefined;
+};
+
 export async function getAnalyticsBreakdown(
   from: Date,
   to: Date,
+  scope: AnalyticsScope,
 ): Promise<AnalyticsBreakdown> {
-  const current = await aggregateWindow(from, to);
+  const current = await aggregateWindow(from, to, scope);
 
   const windowMs = to.getTime() - from.getTime();
   const prevTo = new Date(from.getTime() - 1);
   const prevFrom = new Date(prevTo.getTime() - windowMs);
-  const previous = await aggregateWindow(prevFrom, prevTo, { totalsOnly: true });
+  const previous = await aggregateWindow(prevFrom, prevTo, scope, {
+    totalsOnly: true,
+  });
 
   return {
     ...current,
@@ -135,10 +144,15 @@ type AggregateResult = Omit<AnalyticsBreakdown, "previousTotals">;
 async function aggregateWindow(
   from: Date,
   to: Date,
+  scope: AnalyticsScope,
   opts: { totalsOnly?: boolean } = {},
 ): Promise<AggregateResult> {
+  const scopeWhere = buildAssetScopeWhere(scope.userId, scope.role);
   const assets = await prisma.asset.findMany({
-    where: { publishedAt: { gte: from, lte: to } },
+    where: {
+      ...scopeWhere,
+      publishedAt: { gte: from, lte: to },
+    },
     select: {
       id: true,
       views: true,

@@ -9,7 +9,9 @@ import {
   tryClaimGlobalRefresh,
   getLastGlobalRefresh,
   computeCooldownState,
+  revertGlobalRefresh,
 } from "@/lib/global-refresh";
+import { buildAssetScopeWhere } from "@/lib/asset-scope";
 
 export const maxDuration = 300;
 
@@ -121,8 +123,13 @@ export async function POST(request: Request) {
     );
   }
 
+  // Scope: a non-admin caller can only refresh assets they own / are
+  // assigned to. Asset IDs outside their scope are silently filtered (they
+  // never make it to the toScrape array, so no Bright Data money is spent
+  // on assets the user shouldn't even see).
+  const scopeWhere = buildAssetScopeWhere(userId, role);
   const assets = await prisma.asset.findMany({
-    where: { id: { in: assetIds } },
+    where: { AND: [scopeWhere, { id: { in: assetIds } }] },
     select: {
       id: true,
       platform: true,
@@ -244,10 +251,22 @@ export async function POST(request: Request) {
     }
   }
 
+  // If we just claimed a new global-refresh cycle AND nothing succeeded,
+  // undo the claim so the user (and team) can retry immediately. Otherwise
+  // a single Bright Data hiccup locks everyone out for the full cooldown.
+  // Only reverts when claim.claimed === true; if this was a continuation
+  // batch within an existing cycle, leave the timestamp alone.
+  let cycleReverted = false;
+  if (claim.claimed && updated.length === 0) {
+    await revertGlobalRefresh(claim.previous);
+    cycleReverted = true;
+  }
+
   return NextResponse.json({
     updated,
     failed,
     skipped,
+    cycleReverted,
     cycle: cycleRecord,
   });
 }
